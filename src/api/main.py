@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from api.agent import loop
 from core import repo, slim
 from core import report as report_view
 
@@ -51,10 +52,11 @@ app.add_middleware(
 
 
 class ChatRequest(BaseModel):
-    """Вход продукта — «ИНН или поисковый запрос» (слова кейсодателя)."""
+    """Вопрос о контрагенте в фокусе."""
 
     message: str
-    session_id: str | None = None
+    inn: str
+    session_id: str = "default"
 
 
 def _serialize(report: report_view.Report) -> dict:
@@ -118,5 +120,23 @@ def get_counterparty(inn: str) -> dict:
 
 @app.post("/chat")
 def chat(request: ChatRequest) -> dict:
-    """Диалог с агентом. Память — в рамках одной сессии, между сессиями не храним."""
-    raise NotImplementedError
+    """Диалог о контрагенте. Память — в рамках одной сессии, между сессиями не храним.
+
+    Модель получает тот же отчёт, что видит пользователь: иначе ответ разойдётся
+    с экраном и проверить его будет нельзя.
+
+    Недоступность провайдера отдаётся как 502, а не как пустой ответ: сбой сервиса
+    нельзя выдавать за содержательный ответ о компании.
+    """
+    record = repo.by_inn(request.inn)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    built = report_view.build(record)
+    try:
+        answer = loop.run(loop.session(request.session_id), built, request.message)
+    except Exception as error:  # noqa: BLE001 — наружу уходит один понятный ответ
+        raise HTTPException(
+            status_code=502,
+            detail="Сервис разбора сейчас недоступен. Отчёт выше остаётся полным.",
+        ) from error
+    return {"answer": answer.text, "sections": list(answer.sections)}

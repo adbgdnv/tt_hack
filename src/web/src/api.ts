@@ -177,3 +177,30 @@ export async function getReport(inn: string): Promise<CounterpartyReport | undef
   if (!response.ok) throw new Error('Не удалось загрузить отчёт');
   return (await response.json()) as CounterpartyReport;
 }
+
+export type ChatReply = { answer: string; sections: string[] };
+
+/**
+ * Вопрос о контрагенте.
+ *
+ * Заготовленных ответов здесь нет: если сервер недоступен, вызывающий получает
+ * ошибку и показывает её как сбой сервиса. Выдавать заготовку за ответ модели
+ * значит врать пользователю о том, что он получил разбор.
+ */
+export async function askAboutCounterparty(
+  inn: string,
+  message: string,
+  sessionId: string,
+): Promise<ChatReply> {
+  if (!apiBase) throw new Error('Сервис разбора не настроен');
+  const response = await fetch(`${apiBase}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inn, message, session_id: sessionId }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? 'Сервис разбора сейчас недоступен');
+  }
+  return (await response.json()) as ChatReply;
+}

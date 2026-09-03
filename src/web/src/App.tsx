@@ -306,7 +306,7 @@ function Dashboard({ company, report, onHome, onOpenBlock, chatContext, onToast,
               </section>
             )}
           </section>
-          <ChatPanel company={company} contextBlock={chatContext} onOpenProof={(key) => onOpenBlock(key, true)} onToast={onToast} />
+          <ChatPanel report={report} onToast={onToast} />
         </div>
       </main>
     </>

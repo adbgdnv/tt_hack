@@ -2,97 +2,81 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
 import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
-import { blockQuestions, scenarioAnswer } from '../fixtures';
-import type { AgentAnswer, BlockKey, ChatMessage, Counterparty, Proof } from '../types';
 
-type Props = {
-  company: Counterparty;
-  contextBlock: BlockKey | null;
-  onOpenProof: (block: BlockKey) => void;
+import { askAboutCounterparty } from '../api';
+import type { CounterpartyReport } from '../types';
+
+type Message =
+  | { id: string; role: 'user'; text: string }
+  | { id: string; role: 'agent'; text: string; sections: string[] }
+  /** Сбой сервиса — отдельная роль, а не ответ: путать их нельзя. */
+  | { id: string; role: 'failure'; text: string };
+
+/**
+ * Заготовленные вопросы собираются по состояниям разделов: спрашивать про суды
+ * у компании без судебных дел бессмысленно.
+ */
+function suggestions(report: CounterpartyReport | null): string[] {
+  if (!report) return ['Что настораживает в этой компании?'];
+  const signalled = report.sections.filter((s) => s.state === 'signal');
+  const questions = signalled.slice(0, 2).map((s) => `Что не так с разделом «${s.title}»?`);
+  if (report.signals === 0) questions.push('Что удалось проверить, а что нет?');
+  if (report.unknowns > 0) questions.push('Чего не хватает в отчёте?');
+  questions.push('Что стоит уточнить перед сделкой?');
+  return questions.slice(0, 3);
+}
+
+export function ChatPanel({ report, onToast }: {
+  report: CounterpartyReport | null;
   onToast: (message: string) => void;
-};
-
-const stages = ['Ищем компанию', 'Собираем факты', 'Готовим объяснение'];
-
-function AnswerCard({ answer, onOpenProof, streamingText }: { answer?: AgentAnswer; onOpenProof: (block: BlockKey) => void; streamingText?: string }) {
-  if (!answer) return <div className="stream-text">{streamingText}<span className="stream-caret" /></div>;
-  const parts = [
-    ['Факт', answer.fact],
-    ['Интерпретация', answer.interpretation],
-    ['Чего не хватает', answer.gap],
-    ['Что проверить', answer.next],
-  ];
-  return (
-    <div className="answer-contract">
-      {parts.map(([label, text]) => (
-        <div key={label} className="answer-part">
-          <span>{label}</span>
-          <p>{text}</p>
-        </div>
-      ))}
-      {answer.proofs.length > 0 && (
-        <div className="proofs" aria-label="Подтверждающие факты">
-          {answer.proofs.map((proof) => <ProofWidget key={`${proof.block}-${proof.value}`} proof={proof} onOpen={() => onOpenProof(proof.block)} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProofWidget({ proof, onOpen }: { proof: Proof; onOpen: () => void }) {
-  return (
-    <div className="proof">
-      <button className="proof__button" type="button" onClick={onOpen} aria-label={`${proof.value}, ${proof.label}. Открыть источник`}>
-        <strong>{proof.value}</strong>
-        <span>{proof.label}</span>
-      </button>
-      <Tag size={32} view="muted">{proof.source}</Tag>
-    </div>
-  );
-}
-
-export function ChatPanel({ company, contextBlock, onOpenProof, onToast }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+}) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [stage, setStage] = useState(-1);
-  const [streamingText, setStreamingText] = useState('');
+  const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isBusy = stage >= 0 || Boolean(streamingText);
-  const suggestions = useMemo(() => contextBlock ? blockQuestions[contextBlock] : company.questions, [company.questions, contextBlock]);
+  const sessionId = useMemo(() => `s-${Math.random().toString(36).slice(2)}`, []);
+  const questions = useMemo(() => suggestions(report), [report]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, stage, streamingText]);
+  }, [messages, busy]);
 
+  // Смена контрагента сбрасывает переписку: ответы о предыдущей компании
+  // в новом контексте вводят в заблуждение.
   useEffect(() => {
     setMessages([]);
     setInput('');
-    setStage(-1);
-    setStreamingText('');
-  }, [company.inn]);
+  }, [report?.inn]);
 
   const ask = async (question: string) => {
     const clean = question.trim();
-    if (!clean || isBusy) return;
+    if (!clean || busy || !report) return;
     setInput('');
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'user', text: clean }]);
-    for (let index = 0; index < stages.length; index += 1) {
-      setStage(index);
-      await new Promise((resolve) => window.setTimeout(resolve, 420));
+    setBusy(true);
+    try {
+      const reply = await askAboutCounterparty(report.inn, clean, sessionId);
+      setMessages((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: 'agent', text: reply.answer, sections: reply.sections },
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: 'failure',
+          text: error instanceof Error ? error.message : 'Сервис разбора сейчас недоступен',
+        },
+      ]);
+      onToast('Разбор недоступен — отчёт остаётся полным');
+    } finally {
+      setBusy(false);
     }
-    setStage(-1);
-    const answer = scenarioAnswer(company, clean, contextBlock ?? undefined);
-    const lead = 'Готово. Разбираю только факты из входного отчёта.';
-    for (let index = 1; index <= lead.length; index += 2) {
-      setStreamingText(lead.slice(0, index));
-      await new Promise((resolve) => window.setTimeout(resolve, 18));
-    }
-    setStreamingText('');
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'agent', text: lead, answer }]);
   };
 
   return (
-    <aside className="chat-panel" aria-label="Диалог с ИИ">
+    <aside className="chat-panel" aria-label="Диалог о контрагенте">
       <header className="chat-header">
         <div>
           <span className="ai-mark">AI</span>
@@ -100,58 +84,73 @@ export function ChatPanel({ company, contextBlock, onOpenProof, onToast }: Props
         </div>
         <span className="chat-memory">Память в этой сессии</span>
       </header>
+
       <div className="chat-scroll" ref={scrollRef}>
         <div className="agent-message agent-message--summary">
           <span className="message-author">Ассистент</span>
-          <p>{company.summary}</p>
-          <span className="summary-note">Банковский светофор не пересчитывается.</span>
+          <p>Отвечаю только по этому отчёту. Чего в нём нет — так и скажу.</p>
+          <span className="summary-note">Оценки риска не пересчитываю, объясняю.</span>
         </div>
-        {messages.map((message) => message.role === 'user' ? (
-          <div className="user-message" key={message.id}>{message.text}</div>
-        ) : (
-          <div className="agent-message" key={message.id}>
-            <span className="message-author">Ассистент</span>
-            <AnswerCard answer={message.answer} onOpenProof={onOpenProof} />
-          </div>
-        ))}
-        {stage >= 0 && (
+
+        {messages.map((message) =>
+          message.role === 'user' ? (
+            <div className="user-message" key={message.id}>{message.text}</div>
+          ) : message.role === 'failure' ? (
+            <div className="agent-message agent-message--failure" key={message.id} role="status">
+              <strong>Не удалось получить разбор</strong>
+              <p>{message.text} Это сбой сервиса, а не утверждение о компании — отчёт слева остаётся полным.</p>
+            </div>
+          ) : (
+            <div className="agent-message" key={message.id}>
+              <span className="message-author">Ассистент</span>
+              <p className="agent-message__text">{message.text}</p>
+              {message.sections.length > 0 && (
+                <div className="agent-message__grounding">
+                  {message.sections.map((key) => {
+                    const section = report?.sections.find((s) => s.key === key);
+                    return section ? <Tag key={key} size={32} view="muted">{section.title}</Tag> : null;
+                  })}
+                </div>
+              )}
+            </div>
+          ),
+        )}
+
+        {busy && (
           <div className="agent-message progress-card" aria-live="polite">
-            {stages.map((label, index) => (
-              <div className={index <= stage ? 'progress-step progress-step--active' : 'progress-step'} key={label}>
-                <span>{index < stage ? '✓' : index === stage ? '●' : '○'}</span>{label}
-              </div>
-            ))}
+            <span className="message-author">Ассистент</span>
+            <p>Читаю отчёт…</p>
           </div>
         )}
-        {streamingText && <div className="agent-message"><AnswerCard streamingText={streamingText} onOpenProof={onOpenProof} /></div>}
       </div>
-      <div className="chat-composer">
-        <div className="chat-suggestions" aria-label="Предложенные вопросы">
-          <span>{contextBlock ? `Вопросы · ${company.blocks[contextBlock].title}` : 'Можно спросить'}</span>
-          <div>
-            {suggestions.map((question) => (
-              <button key={question} type="button" onClick={() => void ask(question)} disabled={isBusy}>{question}</button>
-            ))}
-          </div>
-        </div>
-        <form className="chat-composer__row" onSubmit={(event) => { event.preventDefault(); void ask(input); }}>
-          <InputDesktop
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            size={48}
-            block
-            clear="auto"
-            label="Вопрос по отчёту"
-            aria-label="Введите вопрос по отчёту"
-          />
-          <ButtonDesktop size={48} view="accent" type="submit" disabled={!input.trim() || isBusy} aria-label="Отправить вопрос">→</ButtonDesktop>
-        </form>
-        <div className="chat-save">
-          <button type="button" onClick={() => onToast('Постоянная ссылка на чат скопирована')}>🔗 Ссылка</button>
-          <button type="button" onClick={() => onToast('Лог чата сохранён как .txt')}>📄 .txt</button>
-        </div>
-        <p className="chat-disclaimer">Ассистент рекомендует, но не принимает решение за вас.</p>
+
+      <div className="chat-suggestions">
+        {questions.map((question) => (
+          <button key={question} type="button" disabled={busy} onClick={() => ask(question)}>
+            {question}
+          </button>
+        ))}
       </div>
+
+      <form
+        className="chat-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void ask(input);
+        }}
+      >
+        <InputDesktop
+          size={48}
+          block
+          value={input}
+          disabled={busy || !report}
+          placeholder="Спросите об этой компании"
+          onChange={(_, { value }) => setInput(value)}
+        />
+        <ButtonDesktop size={48} view="accent" type="submit" loading={busy} disabled={!report}>
+          Спросить
+        </ButtonDesktop>
+      </form>
     </aside>
   );
 }
