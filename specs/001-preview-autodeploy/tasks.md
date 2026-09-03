@@ -12,7 +12,10 @@ description: "Task list — Автодеплой превью"
 **Tests**: автотестов на bash не заводим (Принцип III). Контроль качества — `shellcheck` в CI
 (T022) + прогон `quickstart.md` (T024). Сам smoke-check — исполняемая проверка выкладки.
 
-**Статус (2026-09-03)**:  24/26 + Phase 7 (T028, T030-T033) сделано, проверено локально (shellcheck чисто, функции релизов с новым PREVIEW_ROOT/current, YAML). T033 — развёл артефакты (/opt/tt-hack-preview) от git-клона: правит и Nginx root (одна строка + reload при настройке). Осталось T027/T029 — только живой прогон.
+**Статус (2026-09-03)**: 24/26 + Phase 7 (T027, T028, T030–T033) сделано. Сервер настроен
+(`ttdeploy`, `/opt/tt-hack-preview`, Nginx root + reload, `smoke` в htpasswd). Пайплайн
+проверен e2e против живого 72.56.16.44: реальный деплой + откат, smoke 200×3, exit 0.
+Осталось **T029** — снять по логу первого реального прогона `deploy.yml` (после мержа PR #3).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -223,9 +226,13 @@ Setup (T001-T002)
 источнику (`FR-*`, `US*/AC*`, `SC-*`, `plan:*`) и типу разрыва (`missing` / `partial` /
 `contradicts` / `unrequested`).
 
-- [ ] T027 Прогнать `specs/001-preview-autodeploy/quickstart.md` (сценарии 1–6) против живого
-      сервера и отметить чек-лист приёмки; расхождения — новыми задачами per US1/US2/US3
-      acceptance, SC-001/003/004 (missing). Блокируется настройкой сервера и секретов.
+- [X] T027 Прогон quickstart против ЖИВОГО сервера (2026-09-03): реальный деплой ключом
+      деплоя на 72.56.16.44 — staging → rsync релиз + bin/ → ssh finalize → atomic switch →
+      smoke 200×3 (/ /report.html /mcp.html) → prune. Откат: --list, --local (на initial),
+      smoke 200×3, exit 0. Сценарии US1/US2(smoke-gate)/US3 подтверждены. Остаётся снять
+      галочку по РЕАЛЬНОМУ прогону deploy.yml после мержа PR #3 (US1 «по push в main»).
+      per US1/US2/US3 acceptance, SC-001/003/004 (было missing → проверено e2e вручную).
+
 - [X] T028 Разрешить расхождение по хранению Basic Auth: `FR-008` (обновлён в analyze) требует
       «логин/пароль Basic Auth … в секретах репозитория», а реализация читает его из
       `~ttdeploy/.preview-smoke-auth` на сервере. `data-model.md` (DeployAccess) и
