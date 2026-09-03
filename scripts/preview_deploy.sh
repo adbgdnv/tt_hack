@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Выкладка превью на общий сервер.
 #
-#   scripts/preview_deploy.sh                 # режим CI: собрать → доставить на сервер → финализировать по ssh
-#   scripts/preview_deploy.sh --local         # на сервере: собрать → положить релиз → переключить → smoke → prune
-#   scripts/preview_deploy.sh --finalize <ID> # на сервере: переключить на releases/<ID> → smoke → prune (вызывается по ssh из CI)
+#   scripts/preview_deploy.sh                 # режим CI: собрать → доставить релиз и bin/ на сервер → финализировать по ssh
+#   scripts/preview_deploy.sh --local         # на сервере из git-клона: собрать → положить релиз → переключить → smoke → prune
+#   scripts/preview_deploy.sh --finalize <ID> # на сервере из PREVIEW_ROOT/bin: переключить на releases/<ID> → smoke → prune (вызывается по ssh из CI)
 #
 # Флаги: --dry-run (план без изменений), --no-web (пропустить сборку src/web).
 #
@@ -142,11 +142,17 @@ case "${MODE}" in
       "${STAGING}/" "${TARGET}:${RELEASES_DIR}/${RID}/"
     log "релиз ${RID} доставлен на ${DEPLOY_HOST} (web=${WEB})"
 
-    # Финализация на сервере. git pull, чтобы серверные скрипты были свежими.
+    # Доставить свежие скрипты в PREVIEW_ROOT/bin — финализация запускается оттуда,
+    # никакого git-клона на сервере для автодеплоя не требуется.
+    rsync -az \
+      --rsync-path="mkdir -p ${BIN_DIR} && rsync" \
+      "${SCRIPT_DIR}/preview_common.sh" "${SCRIPT_DIR}/preview_smoke.sh" \
+      "${SCRIPT_DIR}/preview_deploy.sh" "${SCRIPT_DIR}/preview_rollback.sh" \
+      "${TARGET}:${BIN_DIR}/"
+
     # shellcheck disable=SC2029
-    ssh "${TARGET}" "set -e; cd ${PREVIEW_ROOT} && git pull --quiet --ff-only && \
-      PREVIEW_ROOT=${PREVIEW_ROOT} KEEP_RELEASES=${KEEP_RELEASES} \
-      scripts/preview_deploy.sh --finalize ${RID}"
+    ssh "${TARGET}" "PREVIEW_ROOT=${PREVIEW_ROOT} KEEP_RELEASES=${KEEP_RELEASES} \
+      ${BIN_DIR}/preview_deploy.sh --finalize ${RID}"
     log "deployed ${RID}"
     ;;
 

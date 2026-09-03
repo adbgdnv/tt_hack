@@ -25,7 +25,7 @@
 `--local` (rsync без ssh, для запуска на сервере).
 
 **Шаги:**
-1. `flock` на `/opt/tt-hack/.deploy.lock` (или локальный лок при `--local`).
+1. `flock` на `/opt/tt-hack-preview/.deploy.lock` (или локальный лок при `--local`).
 2. Если `src/web/package.json` есть и не `--no-web`: `cd src/web && npm ci && npm run build`
    → ожидаем `src/web/dist/`. Иначе печатаем `web: skipped`.
 3. Собрать staging-каталог: скопировать `preview/`, затем поверх — `src/web/dist/` (при
@@ -33,10 +33,10 @@
    `--delete`... **уточнение:** web первым в staging, preview вторым тоже без перезаписи ⇒
    реализовать `cp -rn preview/* staging/` после web). Записать `RELEASE`.
 4. `RELEASE_ID=$(date -u +%Y%m%dT%H%M%SZ)-<short-sha>`.
-5. rsync staging → `DEPLOY_USER@DEPLOY_HOST:/opt/tt-hack/releases/$RELEASE_ID/` (или локально).
+5. rsync staging → `DEPLOY_USER@DEPLOY_HOST:/opt/tt-hack-preview/releases/$RELEASE_ID/` (или локально).
 6. `preview_smoke.sh "$PREVIEW_BASE_URL"` — но релиз ещё не текущий ⇒ **по R5-компромиссу:**
    сначала switch, потом smoke; при провале smoke → `preview_rollback.sh` и `exit 1`.
-7. switch: `ln -sfn releases/$RELEASE_ID /opt/tt-hack/preview.tmp && mv -T /opt/tt-hack/preview.tmp /opt/tt-hack/preview`.
+7. switch: `ln -sfn releases/$RELEASE_ID /opt/tt-hack-preview/current.tmp && mv -T /opt/tt-hack-preview/current.tmp /opt/tt-hack-preview/current`.
 8. smoke-check. Провал → rollback + exit 1.
 9. Чистка старых релизов до `KEEP_RELEASES`.
 10. Печать итога (коммит, web-статус, коды smoke, `deployed $RELEASE_ID`).
@@ -60,7 +60,7 @@
 
 **Шаги:**
 1. `flock`.
-2. `CURRENT=$(readlink /opt/tt-hack/preview | xargs basename)`.
+2. `CURRENT=$(readlink /opt/tt-hack-preview/current | xargs basename)`.
 3. Цель: `--to` или самый свежий в `releases/`, который не `CURRENT`.
 4. Нет цели → `exit 3` с сообщением «откатываться не на что» (edge case «первая выкладка»).
 5. Атомарный switch на цель.

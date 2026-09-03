@@ -9,10 +9,10 @@
 | Поле | Где живёт | Значение |
 |---|---|---|
 | `id` | имя каталога | `<UTC timestamp YYYYMMDDTHHMMSSZ>-<short-sha>` |
-| `path` | ФС сервера | `/opt/tt-hack/releases/<id>/` |
+| `path` | ФС сервера | `/opt/tt-hack-preview/releases/<id>/` |
 | `commit` | часть `id` + файл `RELEASE` внутри | полный SHA, ветка, время сборки |
 | `contents` | ФС | содержимое `preview/` + (опц.) содержимое `src/web/dist/` |
-| `is_current` | вычисляется | `readlink /opt/tt-hack/preview` указывает на этот `path` |
+| `is_current` | вычисляется | `readlink /opt/tt-hack-preview/current` указывает на этот `path` |
 
 **Правила:**
 - Хранится максимум 5 релизов. Лишние (самые старые, не `current`) удаляются в конце успешного
@@ -47,7 +47,7 @@ previous снова становится current
 
 ## CurrentPointer (указатель текущей версии)
 
-Симлинк `/opt/tt-hack/preview` → `releases/<id>/`. Nginx (`root /opt/tt-hack/preview;`) раздаёт
+Симлинк `/opt/tt-hack-preview/current` → `releases/<id>/`. Nginx (`root /opt/tt-hack-preview/current;`) раздаёт
 то, на что он указывает. Переключается только атомарным `mv -T`. Единственный «источник
 истины» о том, что сейчас на превью.
 
@@ -64,7 +64,7 @@ previous снова становится current
 
 GitHub Secrets: 4 (`DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`).
 
-**Правила:** `ttdeploy` владеет `/opt/tt-hack/releases/` и симлинком, не имеет `sudo`, не имеет
+**Правила:** `ttdeploy` владеет `/opt/tt-hack-preview/releases/` и симлинком, не имеет `sudo`, не имеет
 доступа на запись в `/opt/tt-hack-review/`. Ни один элемент не хранится в репозитории и не
 печатается в логах.
 

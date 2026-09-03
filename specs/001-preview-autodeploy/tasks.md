@@ -12,10 +12,10 @@ description: "Task list — Автодеплой превью"
 **Tests**: автотестов на bash не заводим (Принцип III). Контроль качества — `shellcheck` в CI
 (T022) + прогон `quickstart.md` (T024). Сам smoke-check — исполняемая проверка выкладки.
 
-**Статус (2026-09-03)**: 24/26 + Phase 7 (T028, T030, T031, T032) сделано и проверено локально
-(`bash -n`, `shellcheck` чисто, `run_smoke` с `SMOKE_PATHS` и без, YAML валиден). Осталось
-**T027** и **T029** (≡ T024/T025) — им нужен живой сервер: настроенный `ttdeploy`, 4 секрета,
-реальный прогон `deploy.yml`.
+**Статус (2026-09-03)**: 24/26 + Phase 7 (T027, T028, T030–T033) сделано. Сервер настроен
+(`ttdeploy`, `/opt/tt-hack-preview`, Nginx root + reload, `smoke` в htpasswd). Пайплайн
+проверен e2e против живого 72.56.16.44: реальный деплой + откат, smoke 200×3, exit 0.
+Осталось **T029** — снять по логу первого реального прогона `deploy.yml` (после мержа PR #3).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -226,9 +226,13 @@ Setup (T001-T002)
 источнику (`FR-*`, `US*/AC*`, `SC-*`, `plan:*`) и типу разрыва (`missing` / `partial` /
 `contradicts` / `unrequested`).
 
-- [ ] T027 Прогнать `specs/001-preview-autodeploy/quickstart.md` (сценарии 1–6) против живого
-      сервера и отметить чек-лист приёмки; расхождения — новыми задачами per US1/US2/US3
-      acceptance, SC-001/003/004 (missing). Блокируется настройкой сервера и секретов.
+- [X] T027 Прогон quickstart против ЖИВОГО сервера (2026-09-03): реальный деплой ключом
+      деплоя на 72.56.16.44 — staging → rsync релиз + bin/ → ssh finalize → atomic switch →
+      smoke 200×3 (/ /report.html /mcp.html) → prune. Откат: --list, --local (на initial),
+      smoke 200×3, exit 0. Сценарии US1/US2(smoke-gate)/US3 подтверждены. Остаётся снять
+      галочку по РЕАЛЬНОМУ прогону deploy.yml после мержа PR #3 (US1 «по push в main»).
+      per US1/US2/US3 acceptance, SC-001/003/004 (было missing → проверено e2e вручную).
+
 - [X] T028 Разрешить расхождение по хранению Basic Auth: `FR-008` (обновлён в analyze) требует
       «логин/пароль Basic Auth … в секретах репозитория», а реализация читает его из
       `~ttdeploy/.preview-smoke-auth` на сервере. `data-model.md` (DeployAccess) и
@@ -250,3 +254,12 @@ Setup (T001-T002)
       `package.json`, но без закоммиченного `package-lock.json`, шаг упадёт («lock file is not
       found»). Либо снять кэш до появления lockfile, либо задокументировать требование
       коммитить `package-lock.json` per FR-002 (partial).
+
+- [X] T033 Развести артефакты деплоя и git-клон: `PREVIEW_ROOT=/opt/tt-hack-preview`
+      (было `/opt/tt-hack`), симлинк `current` (было `preview`), CI синкает `preview_*.sh`
+      в `bin/` вместо `git pull` на сервере. Причина: `preview/` — git-tracked, симлинк на
+      его месте ломает `git pull` в `/opt/tt-hack` при финализации. Nginx `root` →
+      `/opt/tt-hack-preview/current` (одна строка + reload). Приведены `preview_common.sh`,
+      `preview_deploy.sh`, `deploy/nginx/tt-hack-review.conf`, `PREVIEW-DEPLOY.md`, spec
+      Assumptions, plan, research R2/R6, data-model, все три контракта, quickstart per
+      plan: storage decision, research R2 (contradicts исходного плана, найдено при настройке).

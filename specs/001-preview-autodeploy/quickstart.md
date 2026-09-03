@@ -5,7 +5,7 @@
 ## Предусловия
 
 - Первичная настройка сервера выполнена (см. `deploy/PREVIEW-DEPLOY.md`): пользователь
-  `ttdeploy`, `releases/`, симлинк `preview`, публичный ключ в `authorized_keys`.
+  `ttdeploy`, `releases/`, симлинк `current`, `bin/`, публичный ключ в `authorized_keys`.
 - Секреты в репозитории: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`,
   `PREVIEW_BASIC_AUTH`.
 - PR фичи смержен в `main` (иначе `workflow_run` для `deploy.yml` не существует).
@@ -17,7 +17,7 @@
 2. Открыть вкладку **Actions** → workflow **Deploy preview** запустился по завершении **CI**.
 3. Дождаться завершения (ожидаемо < 10 мин от мержа — SC-001).
 4. Открыть `https://tt-hack-review.72.56.16.44.sslip.io/` под Basic Auth → виден новый текст.
-5. На сервере: `readlink /opt/tt-hack/preview` → каталог `releases/<свежий timestamp>-<sha>`.
+5. На сервере: `readlink /opt/tt-hack-preview/current` → каталог `releases/<свежий timestamp>-<sha>`.
 6. `ls /opt/tt-hack-review/` — mtime не изменился; `systemctl status tt-hack-vibe-debug` —
    `active (running)`, без рестарта (FR-005).
 
@@ -37,10 +37,10 @@
 
 **3a. Красный CI:**
 1. Смержить коммит, ломающий `ruff` (например, неиспользуемый импорт в `scripts/`).
-2. CI красный → **Deploy preview** job `skipped`. `readlink preview` не изменился.
+2. CI красный → **Deploy preview** job `skipped`. `readlink /opt/tt-hack-preview/current` не изменился.
 
 **3b. Провал smoke-check:**
-1. Временно в секрете `PREVIEW_BASIC_AUTH` испортить пароль, запустить **Deploy preview**
+1. Временно испортить пароль в `~ttdeploy/.preview-smoke-auth` на сервере, запустить **Deploy preview**
    вручную (`workflow_dispatch`).
 2. rsync прошёл, switch произошёл, smoke `401` → скрипт откатил симлинк на предыдущий релиз,
    job красный, в логе `smoke failed: 401 /`.
@@ -49,18 +49,18 @@
 
 ## Сценарий 4 — ручной откат (US3)
 
-1. На сервере под `ttdeploy`: `scripts/preview_rollback.sh --list` — показывает релизы и
+1. На сервере под `ttdeploy`: `PREVIEW_ROOT=/opt/tt-hack-preview /opt/tt-hack-preview/bin/preview_rollback.sh --list` — показывает релизы и
    текущий.
-2. `scripts/preview_rollback.sh --local` — переключает на предыдущий.
+2. `PREVIEW_ROOT=/opt/tt-hack-preview /opt/tt-hack-preview/bin/preview_rollback.sh --local` — переключает на предыдущий.
 3. Засечь время: от команды до рабочего превью < 2 мин (SC-004), фактически секунды.
-4. `scripts/preview_rollback.sh --local` ещё раз без предыдущего → `exit 3`,
+4. `PREVIEW_ROOT=/opt/tt-hack-preview /opt/tt-hack-preview/bin/preview_rollback.sh --local` ещё раз без предыдущего → `exit 3`,
    «откатываться не на что», симлинк цел.
 5. Смержить новый валидный коммит → автодеплой публикует поверх отката (FR-011).
 
 ## Сценарий 5 — ручная выкладка как запасной путь (FR-010, SC-007)
 
 1. Участник, не настраивавший автодеплой, по инструкции из `deploy/PREVIEW-DEPLOY.md`:
-   `ssh ttdeploy@<host>`, `cd /opt/tt-hack && git pull && scripts/preview_deploy.sh --local`.
+   `ssh ttdeploy@<host>`, `cd /opt/tt-hack && git pull --ff-only && PREVIEW_ROOT=/opt/tt-hack-preview scripts/preview_deploy.sh --local`.
 2. Превью обновилось, smoke зелёный.
 
 ## Сценарий 6 — два мержа подряд (edge case)
@@ -68,7 +68,7 @@
 1. Смержить два PR в `main` в течение минуты.
 2. **Actions**: два прогона **Deploy preview**, второй ждёт первого (concurrency
    `preview-deploy`), не отменяя.
-3. Итог: `readlink preview` → релиз второго (последнего) коммита. Файлы не перемешаны.
+3. Итог: `readlink /opt/tt-hack-preview/current` → релиз второго (последнего) коммита. Файлы не перемешаны.
 
 ## Чек-лист приёмки
 
