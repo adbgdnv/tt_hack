@@ -39,7 +39,9 @@ description: "Task list — Автодеплой превью"
       `atomic_switch <release_dir>` (`ln -sfn` + `mv -T` симлинка `/opt/tt-hack/preview`),
       `find_previous_release()` (свежий каталог в `releases/`, не равный текущему),
       `prune_releases <keep>` (удалить старые, кроме текущего). Соответствует
-      `contracts/server-layout.md` и `data-model.md`.
+      `contracts/server-layout.md` и `data-model.md`. Все пути строятся от константы
+      `PREVIEW_ROOT=/opt/tt-hack` и физически не выходят за `releases/` и симлинк `preview`;
+      ни одной команды `systemctl`/`docker`/записи в `/opt/tt-hack-review/` (FR-005).
 - [ ] T004 [P] Создать `scripts/preview_smoke.sh` по `contracts/deploy-scripts.md`: аргументы
       `<base-url> [path ...]`, дефолтные пути `/ /report.html /mcp.html`, `curl -sS -o /dev/null
       -w '%{http_code}' -u "$PREVIEW_BASIC_AUTH"`, построчный вывод `КОД ПУТЬ`, накопление
@@ -69,7 +71,8 @@ description: "Task list — Автодеплой превью"
 - [ ] T007 [US1] Создать `scripts/preview_deploy.sh`: shebang + `source preview_common.sh`,
       разбор флагов `--dry-run` / `--local` / `--no-web`, валидация обязательного env
       (`PREVIEW_BASIC_AUTH`; `DEPLOY_HOST`/`DEPLOY_USER` кроме `--local`), коды выхода `0/1/2`
-      по `contracts/deploy-scripts.md`.
+      по `contracts/deploy-scripts.md`. Целевые пути на сервере — только под `PREVIEW_ROOT`;
+      скрипт не содержит `systemctl`, `docker`, `tt-hack-review` (FR-005).
 - [ ] T008 [US1] В `scripts/preview_deploy.sh` — условная сборка фронта: если
       `src/web/package.json` существует и не `--no-web` → `(cd src/web && npm ci && npm run
       build)`, ожидать `src/web/dist/`; иначе `log "web: skipped (no package.json)"` (FR-002,
@@ -82,9 +85,10 @@ description: "Task list — Автодеплой превью"
       -a --delete staging/ <target>:/opt/tt-hack/releases/$RELEASE_ID/`; `<target>` — по ssh
       (`$DEPLOY_USER@$DEPLOY_HOST`) или локально при `--local`. `--dry-run` печатает план и
       выходит.
-- [ ] T011 [US1] В `scripts/preview_deploy.sh` — финализация: `atomic_switch releases/$RELEASE_ID`,
-      затем `prune_releases "${KEEP_RELEASES:-5}"`, печать итога (коммит, web-статус,
-      `deployed $RELEASE_ID`). (Smoke между switch и prune добавляется в T015.)
+- [ ] T011 [US1] В `scripts/preview_deploy.sh` — финализация: `atomic_switch releases/$RELEASE_ID`
+      (атомарно, FR-007a), затем `prune_releases "${KEEP_RELEASES:-5}"`, печать итога (коммит,
+      web-статус, `deployed $RELEASE_ID`). (Smoke сразу после switch и авто-откат добавляются
+      в T015 — FR-007b.)
 - [ ] T012 [US1] Создать `.github/workflows/deploy.yml` по `contracts/deploy-workflow.md`:
       `on.workflow_run` (workflows `["CI"]`, types `[completed]`, branches `[main]`) +
       `workflow_dispatch`; `concurrency: {group: preview-deploy, cancel-in-progress: false}`;
@@ -111,10 +115,11 @@ description: "Task list — Автодеплой превью"
 **Independent Test**: искусственно провалить smoke (испортить `PREVIEW_BASIC_AUTH`) →
 `workflow_dispatch` → job красный, публичный адрес отдаёт прежнюю версию.
 
-- [ ] T015 [US2] В `scripts/preview_deploy.sh` между `atomic_switch` и `prune_releases`:
-      `preview_smoke.sh "$PREVIEW_BASE_URL"`; при ненулевом коде — `atomic_switch` на
-      `find_previous_release`, `log` причину (`smoke failed: <код> <путь>`), `exit 1`. Prune
-      не выполняется при провале.
+- [ ] T015 [US2] В `scripts/preview_deploy.sh` сразу после `atomic_switch`, до `prune_releases`
+      (FR-007b): `preview_smoke.sh "$PREVIEW_BASE_URL"`; при ненулевом коде — `atomic_switch` на
+      `find_previous_release`, `log` причину (`smoke failed: <код> <путь>; rolled back to
+      <previous>`), `exit 1`. Prune при провале не выполняется. Окно непроверенной текущей
+      версии = время одного `preview_smoke.sh`.
 - [ ] T016 [US2] В `scripts/preview_deploy.sh` — fail-closed до switch: `npm`/`rsync`/сборка
       staging падают → `die` без изменения симлинка; `with_lock` не взят → `exit 1` с понятным
       сообщением (edge case «ручная и авто одновременно»).
@@ -152,9 +157,10 @@ description: "Task list — Автодеплой превью"
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T022 [P] Добавить `shellcheck` для `scripts/*.sh` в CI: шаг в `.github/workflows/ci.yml`
-      (`shellcheck scripts/preview_*.sh scripts/preview_common.sh`) — держит деплой-скрипты
-      чистыми, не создавая отдельный workflow.
+- [ ] T022 [P] Добавить в `.github/workflows/ci.yml` шаг проверки деплой-скриптов:
+      `shellcheck scripts/preview_*.sh scripts/preview_common.sh` + guard
+      `! grep -REn 'tt-hack-review|systemctl|docker ' scripts/preview_*.sh scripts/preview_common.sh`
+      (падает, если скрипты трогают запретное — FR-005). Отдельный workflow не создаём.
 - [ ] T023 [P] В `docs/architecture.md` (раздел «Ограничения, влияющие на архитектуру» /
       «Сроки») — строка: превью общего сервера обновляется автодеплоем по push в main, ручной
       путь и откат — в `deploy/PREVIEW-DEPLOY.md`. Не противоречит «прод продукта не нужен».

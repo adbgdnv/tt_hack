@@ -24,18 +24,26 @@
 
 ```
 (нет)
-  │  preview_deploy.sh: rsync содержимого
+  │  preview_deploy.sh: rsync содержимого в releases/<id>/
   ▼
-staged ──── smoke-check провален ────▶ остаётся staged, симлинк не тронут, deploy exit 1
-  │
-  │  smoke-check 200 по всем путям → mv -T симлинка
+staged
+  │  atomic_switch: mv -T симлинка на releases/<id>   (FR-007a, атомарно)
   ▼
-current ──── следующий деплой ────▶ previous
+current (непроверенная)
   │
-  │  preview_rollback.sh (если это был current)
+  ├─ smoke-check 200 по всем путям ──▶ current (проверенная) ──▶ prune старых
+  │
+  └─ smoke-check провален ──▶ atomic_switch на previous, deploy exit 1   (FR-007b)
+                                 previous снова current, битый релиз остаётся в releases/
+
+current ──── следующий успешный деплой ────▶ previous
+  │
+  │  preview_rollback.sh --local  (ручной, US3)
   ▼
 previous снова становится current
 ```
+
+Окно, в котором «current» ещё не прошёл smoke, длится один прогон `preview_smoke.sh` (секунды).
 
 ## CurrentPointer (указатель текущей версии)
 
