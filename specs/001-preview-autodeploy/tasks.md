@@ -12,10 +12,13 @@ description: "Task list — Автодеплой превью"
 **Tests**: автотестов на bash не заводим (Принцип III). Контроль качества — `shellcheck` в CI
 (T022) + прогон `quickstart.md` (T024). Сам smoke-check — исполняемая проверка выкладки.
 
-**Статус (2026-09-03)**: 24/26 + Phase 7 (T027, T028, T030–T033) сделано. Сервер настроен
-(`ttdeploy`, `/opt/tt-hack-preview`, Nginx root + reload, `smoke` в htpasswd). Пайплайн
-проверен e2e против живого 72.56.16.44: реальный деплой + откат, smoke 200×3, exit 0.
-Осталось **T029** — снять по логу первого реального прогона `deploy.yml` (после мержа PR #3).
+**Статус (2026-09-03)**: ✅ все задачи закрыты. Фича слита в `main` (PR #3 + добивка #4).
+Сервер настроен (`ttdeploy`, `/opt/tt-hack-preview`, Nginx root + reload, `smoke` в htpasswd),
+4 секрета заведены. Первый реальный автодеплой по `workflow_run` на `main` (863abb6):
+staging → rsync релиз + `bin/` → ssh finalize → switch → smoke 200×3 → `deployed`,
+`current` → `20260903T154955Z-863abb6`, публичный адрес `200`. Лог прогона: секретов нет,
+`DEPLOY_HOST` маскируется как `***` (T029). `/opt/tt-hack-review/` и `tt-hack-vibe-debug`
+не затронуты (FR-005 подтверждён live).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -239,7 +242,7 @@ Setup (T001-T002)
       `contracts/deploy-workflow.md` / `contracts/deploy-scripts.md` всё ещё описывают
       `PREVIEW_BASIC_AUTH` как GitHub Secret. Выбрать один вариант и привести к нему спеку,
       data-model и контракты per FR-008, plan: R6 (contradicts).
-- [ ] T029 Проверить лог реального прогона `deploy.yml`: ни `DEPLOY_SSH_KEY`, ни
+- [X] T029 Проверить лог реального прогона `deploy.yml`: ни `DEPLOY_SSH_KEY`, ни
       `DEPLOY_KNOWN_HOSTS`, ни Basic Auth не видны в открытом виде (в шагах и в
       `$GITHUB_STEP_SUMMARY`) per FR-014, SC-006 (missing). Блокируется первым живым прогоном.
 - [X] T030 Добавить в лог выкладки явную строку контура (`контур: preview (main)`) — в
@@ -263,3 +266,23 @@ Setup (T001-T002)
       `preview_deploy.sh`, `deploy/nginx/tt-hack-review.conf`, `PREVIEW-DEPLOY.md`, spec
       Assumptions, plan, research R2/R6, data-model, все три контракта, quickstart per
       plan: storage decision, research R2 (contradicts исходного плана, найдено при настройке).
+
+---
+
+## Phase 8: Convergence
+
+Сгенерировано `/speckit-converge` 2026-09-03 после первого реального автодеплоя на `main`.
+FR-001..014, US1–US3, критерии успеха и принципы конституции — реализованы и подтверждены на
+живом сервере (release `20260903T154955Z-863abb6`, smoke 200×3, `/opt/tt-hack-review/` и
+`tt-hack-vibe-debug` не затронуты). Остаются два мелких хвоста:
+
+- [ ] T034 В `RELEASE`-файле релиза `branch=HEAD` вместо `main`: `deploy.yml` делает checkout
+      по `head_sha` (detached HEAD), `git rev-parse --abbrev-ref HEAD` → `HEAD`. Прокинуть имя
+      ветки явно — `github.event.workflow_run.head_branch` в env → в `build_staging` писать его
+      в `RELEASE`, fallback на `git rev-parse` для `--local` per FR-012, data-model RunReport
+      («опубликованный коммит: SHA + ветка») (partial).
+- [ ] T035 Проверить FR-010/SC-007 на практике: участник, не настраивавший автодеплой, по
+      `deploy/PREVIEW-DEPLOY.md` выполняет `ssh ttdeploy@… && cd /opt/tt-hack && git pull &&
+      PREVIEW_ROOT=/opt/tt-hack-preview scripts/preview_deploy.sh --local` и получает
+      обновлённое превью. Сейчас `--local` проверен только автором фичи per FR-010, SC-007
+      (missing — верификация).
