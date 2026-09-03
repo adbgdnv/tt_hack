@@ -1,0 +1,45 @@
+/* Печатная версия отчёта.
+   Кнопки, поиск и панель диалога из печати убираются: на бумаге они бесполезны,
+   а распечатанный отчёт должен оставаться читаемым целиком. */
+
+@media print {
+  .app-header,
+  .back-link,
+  .report-actions,
+  .chat-panel,
+  .compare-bar,
+  .toast-wrap,
+  .indicator-legend {
+    display: none !important;
+  }
+
+  .dashboard-layout {
+    display: block !important;
+  }
+
+  /* Разделы в одну колонку: две колонки на бумаге рвутся между страницами */
+  .report-sections {
+    display: block !important;
+  }
+
+  .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+    border: 1px solid #999;
+  }
+
+  /* Приглушённые разделы на бумаге читаются наравне: их отсутствие — тоже информация */
+  .report-section--muted {
+    opacity: 1 !important;
+  }
+
+  .page {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+}

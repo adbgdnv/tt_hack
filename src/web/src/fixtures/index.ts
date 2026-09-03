@@ -1,11 +1,5 @@
 import type { AgentAnswer, BlockKey, Counterparty } from '../types';
 
-const factorLabels: Record<string, string> = {
-  arbitrationDefendant: 'выступает ответчиком в арбитраже',
-  executionProceedings: 'есть исполнительные производства',
-  liquidationStatus: 'принято решение о предстоящем исключении из ЕГРЮЛ',
-  invalidRegistrationData: 'в ЕГРЮЛ есть недостоверные сведения',
-};
 
 export const counterparties: Counterparty[] = [
   {
@@ -345,4 +339,3 @@ export const blockQuestions: Record<BlockKey, string[]> = {
   activity: ['Какой основной ОКВЭД?', 'Совпадает ли он с предметом сделки?', 'Что ещё проверить по деятельности?'],
 };
 
-export const humanFactorLabels = factorLabels;

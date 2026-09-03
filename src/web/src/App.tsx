@@ -7,7 +7,6 @@ import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
 import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop';
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { getCounterparty, getReport, searchCounterparties } from './api';
-import { humanFactorLabels } from './fixtures';
 import type { BlockKey, Counterparty, CounterpartyReport, HistoryItem, ReportBlock } from './types';
 import { BlockModal } from './components/BlockModal';
 import { ChatPanel } from './components/ChatPanel';
@@ -254,20 +253,29 @@ function Dashboard({ company, report, onHome, onOpenBlock, chatContext, onToast,
             </div>
           </div>
           <div className="report-actions">
-            <ButtonDesktop size={40} view="secondary" onClick={() => onToast('PDF-снимок отчёта сохранён')}>↓ PDF</ButtonDesktop>
-            <ButtonDesktop size={40} view="secondary" onClick={() => onToast('Постоянная ссылка скопирована')}>↗ Ссылка</ButtonDesktop>
-            <ButtonDesktop size={40} view="outlined" disabled={compared || compareCount >= 2} onClick={onAddCompare}>
-              {compared ? '✓ В сравнении' : '+ Сравнить'}
+            {/* Печать средствами браузера: он же даёт и сохранение в файл.
+                Генерация PDF на сервере — отдельная зависимость ради кнопки. */}
+            <ButtonDesktop size={40} view="secondary" onClick={() => window.print()}>
+              Распечатать
             </ButtonDesktop>
+            <ButtonDesktop
+              size={40}
+              view="secondary"
+              onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}?inn=${company.inn}`;
+                navigator.clipboard
+                  .writeText(url)
+                  .then(() => onToast('Ссылка на отчёт скопирована'))
+                  .catch(() => onToast('Не удалось скопировать — скопируйте адрес из строки браузера'));
+              }}
+            >
+              Ссылка на отчёт
+            </ButtonDesktop>
+            {/* Кнопки «Сравнить» здесь нет намеренно: сравнение не реализовано,
+                а нерабочая кнопка обманывает. */}
           </div>
         </section>
 
-        {company.negativeFactors.length > 0 && (
-          <section className="factor-strip">
-            <span>Факторы во входных данных</span>
-            <div>{company.negativeFactors.map((factor) => <Tag key={factor} size={32} view="muted">{humanFactorLabels[factor] ?? factor}</Tag>)}</div>
-          </section>
-        )}
 
         <div className="dashboard-layout">
           <section>
@@ -302,7 +310,6 @@ function Dashboard({ company, report, onHome, onOpenBlock, chatContext, onToast,
                   <ButtonDesktop size={40} view="secondary" onClick={() => onOpenBlock('finances')}>Подробнее</ButtonDesktop>
                 </div>
                 <FinancialChart data={company.financials} />
-                {company.inn === '7716512345' && <p className="finance-gap"><strong>Пробел:</strong> бухгалтерская отчётность за 2025 год не представлена.</p>}
               </section>
             )}
           </section>
@@ -329,6 +336,13 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
   const [homeChat, setHomeChat] = useState(false);
   const [modalBlock, setModalBlock] = useState<BlockKey | null>(null);
+
+  // Открытие адреса с ИНН ведёт к тому же отчёту — иначе постоянная ссылка бессмысленна.
+  useEffect(() => {
+    const inn = new URLSearchParams(window.location.search).get('inn');
+    if (inn) void openCompany(inn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [chatContext, setChatContext] = useState<BlockKey | null>(null);
   const [highlighted, setHighlighted] = useState(false);
   const [toast, setToast] = useState('');
@@ -383,6 +397,9 @@ export default function App() {
       }
       setCompany(found);
       setChatContext(null);
+      // Отчёт получает собственный адрес: без него кнопка «Ссылка» копировала бы
+      // адрес поиска, то есть врала.
+      window.history.replaceState(null, '', `?inn=${encodeURIComponent(inn)}`);
       // Отчёт грузится отдельно: его отсутствие не должно ронять экран целиком.
       getReport(inn).then((r) => setReport(r ?? null)).catch(() => setReport(null));
       const item: HistoryItem = { name: found.name, inn: found.inn, bankRisk: found.bankRisk, dataDate: found.dataDate };
