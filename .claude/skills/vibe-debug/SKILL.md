@@ -29,11 +29,13 @@ description: Поднять или продолжить коммент-прев�
 
 ## Поднять превью
 
-Основной контур — общий сервер команды (Nginx Basic Auth + systemd,
-`deploy/`, см. `docs/VIBE-DEBUG.md`). Комментарии там общие и переживают
-перезапуск. Локальный запуск — только для отладки самого оверлея.
+Основной контур — общий сервер команды: `https://tt-hack-review.72.56.16.44.sslip.io/`
+(Nginx Basic Auth + systemd `tt-hack-vibe-debug`, см. `docs/VIBE-DEBUG.md`).
+Комментарии там общие и переживают перезапуск. Локальный запуск — только для
+отладки самого оверлея.
 
-1. Проверить, жив ли общий сервер: `curl -sf <preview-host>/__review__/comments`.
+1. Проверить, жив ли общий сервер:
+   `curl -sfu USER:PASS https://tt-hack-review.72.56.16.44.sslip.io/__review__/comments`.
    Жив — не плодить второй, вернуть существующий URL и маршрут.
 2. Локально, если нужно: `python3 scripts/vibe_debug_server.py`
    (порт — `VIBE_DEBUG_PORT`, корень статики — `VIBE_DEBUG_ROOT`,

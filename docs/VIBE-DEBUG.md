@@ -52,39 +52,52 @@ python3 scripts/vibe_debug_server.py
 Готовые шаблоны:
 
 - `deploy/systemd/tt-hack-vibe-debug.service`
-- `deploy/nginx/tt-hack-vibe-debug.location.conf`
+- `deploy/nginx/tt-hack-review.conf`
 
-Развёртывание:
+### Текущий инстанс
+
+| | |
+|---|---|
+| Сервер | `72.56.16.44`, Ubuntu 24.04 |
+| Домен | `tt-hack-review.72.56.16.44.sslip.io` (sslip.io → wildcard DNS на IP, домен не покупался) |
+| URL | `https://tt-hack-review.72.56.16.44.sslip.io/` |
+| Код | `/opt/tt-hack` (`git pull` для обновления) |
+| Данные ревью | `/opt/tt-hack-review/` (вне репозитория, деплой не трогает) |
+| Сервис | `systemctl {status,restart} tt-hack-vibe-debug` |
+| Логины | `dbndrnk`, `poulyak`, `adbgdnv` (пароли — в `/etc/nginx/htpasswd/tt-hack` на сервере) |
+
+### Развёртывание с нуля
 
 ```bash
-# на сервере
-sudo mkdir -p /opt/tt-hack /opt/tt-hack-review
+sudo apt update && sudo apt install -y nginx apache2-utils certbot python3-certbot-nginx
+
+sudo mkdir -p /opt/tt-hack-review
 sudo git clone https://github.com/adbgdnv/tt_hack.git /opt/tt-hack
 sudo chown -R www-data:www-data /opt/tt-hack /opt/tt-hack-review
 
 # сервис
 sudo cp /opt/tt-hack/deploy/systemd/tt-hack-vibe-debug.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now tt-hack-vibe-debug
-systemctl status tt-hack-vibe-debug
 
-# доступ (пример; логины согласуйте с командой)
+# доступ
 sudo mkdir -p /etc/nginx/htpasswd
-sudo htpasswd -c /etc/nginx/htpasswd/tt-hack reviewer1
-sudo htpasswd    /etc/nginx/htpasswd/tt-hack reviewer2
+sudo htpasswd -bc /etc/nginx/htpasswd/tt-hack dbndrnk 'ПАРОЛЬ'
+sudo htpasswd -b  /etc/nginx/htpasswd/tt-hack poulyak 'ПАРОЛЬ'
+sudo htpasswd -b  /etc/nginx/htpasswd/tt-hack adbgdnv 'ПАРОЛЬ'
 
-# nginx: вставить location-файл в server-блок домена превью
+# nginx
+sudo cp /opt/tt-hack/deploy/nginx/tt-hack-review.conf /etc/nginx/sites-available/
+sudo ln -sf /etc/nginx/sites-available/tt-hack-review.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
+
+# HTTPS (Let's Encrypt через sslip.io-домен)
+sudo certbot --nginx -d tt-hack-review.72.56.16.44.sslip.io --non-interactive --agree-tos -m dbndrnk@example.com --redirect
 ```
 
-Обновление превью — `git pull` в `/opt/tt-hack` и
-`sudo systemctl restart tt-hack-vibe-debug`. Данные ревью лежат в
-`/opt/tt-hack-review/` и деплоем не затрагиваются.
+Обновление превью — `cd /opt/tt-hack && sudo git pull && sudo systemctl restart tt-hack-vibe-debug`.
 
 Логин из Basic Auth уходит в `X-Review-User` и становится `author` комментария —
 поле формой не подменяется.
-
-> Дай доступ к серверу и домен превью — допишу location под ваш конфиг Nginx и
-> подниму сервис.
 
 ## Когда появится фронтенд
 
