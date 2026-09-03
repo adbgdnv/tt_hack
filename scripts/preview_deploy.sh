@@ -57,7 +57,8 @@ build_staging() {
 
   local sha branch
   sha="$(git -C "${REPO_DIR}" rev-parse HEAD 2>/dev/null || echo nogit)"
-  branch="$(git -C "${REPO_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  # В CI checkout по head_sha → detached HEAD, git даёт "HEAD"; берём HEAD_BRANCH из workflow.
+  branch="${HEAD_BRANCH:-$(git -C "${REPO_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')}"
   cat > "${staging}/RELEASE" <<EOF
 sha=${sha}
 branch=${branch}

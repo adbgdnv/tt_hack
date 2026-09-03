@@ -276,7 +276,7 @@ FR-001..014, US1–US3, критерии успеха и принципы кон
 живом сервере (release `20260903T154955Z-863abb6`, smoke 200×3, `/opt/tt-hack-review/` и
 `tt-hack-vibe-debug` не затронуты). Остаются два мелких хвоста:
 
-- [ ] T034 В `RELEASE`-файле релиза `branch=HEAD` вместо `main`: `deploy.yml` делает checkout
+- [X] T034 В `RELEASE`-файле релиза `branch=HEAD` вместо `main`: `deploy.yml` делает checkout
       по `head_sha` (detached HEAD), `git rev-parse --abbrev-ref HEAD` → `HEAD`. Прокинуть имя
       ветки явно — `github.event.workflow_run.head_branch` в env → в `build_staging` писать его
       в `RELEASE`, fallback на `git rev-parse` для `--local` per FR-012, data-model RunReport
