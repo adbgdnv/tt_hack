@@ -124,11 +124,11 @@ description: "Задачи: дашборд отчёта и диалог о ко�
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T035 Сократить `src/web/src/fixtures/index.ts` до запасного пути при недоступном сервере — заготовленные ответы диалога больше не нужны
-- [ ] T036 [P] Дописать в `docs/architecture.md` раздел о сборке отчёта: почему в ядре, почему одно представление на интерфейс, диалог и MCP
-- [ ] T037 [P] Отметить в `docs/data_reference.md` находку: у всех факторов заполнены `name` и `chapter`, плюс аномалия `inspectionWithViolation` в поле раздела
-- [ ] T038 Прогнать [quickstart.md](./quickstart.md) целиком, все пять разделов
-- [ ] T039 Прогнать проверки из `.github/workflows/ci.yml` локально плюс `npx tsc -b` и `npm run build` в `src/web`
+- [X] T035 Сократить `src/web/src/fixtures/index.ts` до запасного пути при недоступном сервере — заготовленные ответы диалога больше не нужны
+- [X] T036 [P] Дописать в `docs/architecture.md` раздел о сборке отчёта: почему в ядре, почему одно представление на интерфейс, диалог и MCP
+- [X] T037 [P] Отметить в `docs/data_reference.md` находку: у всех факторов заполнены `name` и `chapter`, плюс аномалия `inspectionWithViolation` в поле раздела
+- [X] T038 Прогнать [quickstart.md](./quickstart.md) целиком, все пять разделов
+- [X] T039 Прогнать проверки из `.github/workflows/ci.yml` локально плюс `npx tsc -b` и `npm run build` в `src/web`
 
 ---
 

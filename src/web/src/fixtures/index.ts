@@ -1,4 +1,12 @@
-import type { AgentAnswer, BlockKey, Counterparty } from '../types';
+/**
+ * Заготовленные примеры — запасной путь на случай недоступного сервера.
+ *
+ * Ответы диалога отсюда убраны: чат ходит к модели, и подсовывать заготовку
+ * вместо ответа значит врать пользователю о том, что он получил разбор.
+ * Словарь формулировок факторов тоже убран — они приходят с сервера
+ * из поля `name` выгрузки кейсодателя.
+ */
+import type { Counterparty } from '../types';
 
 
 export const counterparties: Counterparty[] = [
@@ -271,71 +279,5 @@ export const searchFixtures = (query: string) => {
       .toLocaleLowerCase('ru-RU')
       .includes(normalized),
   );
-};
-
-const answersByBlock: Record<BlockKey, (company: Counterparty) => AgentAnswer> = {
-  registration: (company) => ({
-    fact: company.blocks.registration.details.map((item) => `${item.label}: ${item.value}`).join('. '),
-    interpretation: company.blocks.registration.analysis,
-    gap: company.legalForm === 'entrepreneur' ? 'Учредители и уставный капитал к ИП неприменимы.' : 'Условия будущей сделки во входных данных отсутствуют.',
-    next: 'Проверьте актуальную выписку и полномочия подписанта на дату договора.',
-    proofs: [{ value: company.blocks.registration.details[1]?.value ?? company.status, label: 'регистрационные сведения', source: company.blocks.registration.source, block: 'registration' }],
-  }),
-  finances: (company) => ({
-    fact: company.legalForm === 'entrepreneur' ? 'У ИП не бывает бухгалтерской отчётности юридического лица.' : company.blocks.finances.preview.join('. '),
-    interpretation: company.blocks.finances.analysis,
-    gap: company.legalForm === 'entrepreneur' ? 'Это неприменимое поле, а не отсутствие данных.' : company.inn === '7716512345' ? 'Бухгалтерская отчётность за 2025 год не представлена.' : 'Условия сделки и размер обязательства не указаны.',
-    next: company.blocks.finances.workaround ?? 'Запросите актуальную отчётность и сопоставьте показатели с суммой сделки.',
-    proofs: company.inn === '7716512345' ? [{ value: '−34%', label: 'выручка год к году', source: 'Финансы · 02.09.2026', block: 'finances' }, { value: '−6 млн ₽', label: 'чистая прибыль 2025', source: 'Финансы · 02.09.2026', block: 'finances' }] : [],
-  }),
-  courts: (company) => ({
-    fact: company.inn === '7716512345' ? 'За последние 12 месяцев указаны 4 дела, во всех компания выступает ответчиком. Сумма требований — 8,2 млн ₽.' : company.blocks.courts.preview.join('. '),
-    interpretation: company.blocks.courts.analysis,
-    gap: company.blocks.courts.empty ? 'Данных недостаточно — отсутствие записи не подтверждает отсутствие дел.' : 'Предметы дел и тексты судебных актов во входных данных не раскрыты.',
-    next: company.blocks.courts.workaround ?? 'Откройте карточки дел, уточните предмет требований и исполнение решений.',
-    proofs: company.inn === '7716512345' ? [{ value: '4', label: 'дела в роли ответчика', source: 'Суды · 02.09.2026', block: 'courts' }, { value: '8,2 млн ₽', label: 'сумма требований', source: 'Суды · 02.09.2026', block: 'courts' }] : [],
-  }),
-  enforcement: (company) => ({
-    fact: company.blocks.enforcement.preview.join('. '),
-    interpretation: company.blocks.enforcement.analysis,
-    gap: 'Основания и сумма каждого производства во входных данных не раскрыты.',
-    next: 'Уточните основания производств и их текущий статус перед принятием решения.',
-    proofs: [{ value: company.inn === '7716512345' ? '54' : company.inn === '771612345678' ? '2' : '0', label: 'активных производств', source: company.blocks.enforcement.source, block: 'enforcement' }],
-  }),
-  registries: (company) => ({
-    fact: company.blocks.registries.preview.join('. '),
-    interpretation: company.blocks.registries.analysis,
-    gap: 'Данных недостаточно. Это ответ, а не нулевой риск.',
-    next: company.blocks.registries.workaround ?? 'Запросите актуальные реестровые сведения.',
-    proofs: [],
-  }),
-  activity: (company) => ({
-    fact: company.blocks.activity.preview.join('. '),
-    interpretation: company.blocks.activity.analysis,
-    gap: 'Предмет будущего договора во входных данных отсутствует.',
-    next: 'Сопоставьте основной ОКВЭД с предметом и масштабом сделки.',
-    proofs: [],
-  }),
-};
-
-export function scenarioAnswer(company: Counterparty, question: string, context?: BlockKey): AgentAnswer {
-  const lowered = question.toLocaleLowerCase('ru-RU');
-  let block = context;
-  if (lowered.includes('суд') || lowered.includes('иск')) block = 'courts';
-  else if (lowered.includes('выруч') || lowered.includes('финанс') || lowered.includes('прибыл') || lowered.includes('бух')) block = 'finances';
-  else if (lowered.includes('исключ') || lowered.includes('егрюл') || lowered.includes('регистра')) block = 'registration';
-  else if (lowered.includes('производств') || lowered.includes('фссп')) block = 'enforcement';
-  else if (lowered.includes('реестр') || lowered.includes('бенефициар')) block = 'registries';
-  else if (lowered.includes('оквэд') || lowered.includes('деятельност')) block = 'activity';
-  return answersByBlock[block ?? 'registration'](company);
-}
-
-export const blockQuestions: Record<BlockKey, string[]> = {
-  registration: ['Что означает текущий статус?', 'Какие сведения проверить в выписке?', 'Как проверить полномочия подписанта?'],
-  finances: ['Как менялась выручка?', 'Что известно о прибыли?', 'Каких финансовых данных не хватает?'],
-  courts: ['В какой роли компания в судах?', 'Какова сумма требований?', 'Что проверить в судебных актах?'],
-  enforcement: ['Сколько активных производств?', 'Известна ли их сумма?', 'Как это может повлиять на обязательства?'],
-  registries: ['Каких реестровых данных нет?', 'Можно ли считать пустое поле хорошим знаком?', 'Какие косвенные признаки проверить?'],
-  activity: ['Какой основной ОКВЭД?', 'Совпадает ли он с предметом сделки?', 'Что ещё проверить по деятельности?'],
 };
 
