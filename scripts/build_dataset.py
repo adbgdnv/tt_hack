@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from core.config import dataset_path, find_up  # noqa: E402
-from core.normalize import normalize_nested, type_map  # noqa: E402
+from core.normalize import normalize_flat, normalize_nested, type_map  # noqa: E402
 
 csv.field_size_limit(2**31 - 1)
 
@@ -40,6 +40,17 @@ def read_nested(path: Path) -> list[dict]:
     return [normalize_nested(item["report"]) for item in raw]
 
 
+def read_flat(path: Path, types: dict[str, str]) -> list[dict]:
+    """Записи плоской выгрузки, развёрнутые и приведённые по карте типов.
+
+    Карта снимается с вложенной выгрузки: схема у выгрузок общая, а типы угадывать
+    нельзя — текст `false` непуст и потому истинен, и все исполнительные производства
+    компании оказались бы активными.
+    """
+    with path.open(encoding="utf-8", newline="") as handle:
+        return [normalize_flat(row, types) for row in csv.DictReader(handle)]
+
+
 def build() -> dict:
     """Собирает набор. Возвращает готовую полезную нагрузку."""
     nested_path = find_up(NESTED_DUMP)
@@ -52,8 +63,16 @@ def build() -> dict:
     counterparties = read_nested(nested_path)
     sources = [{"file": nested_path.name, "records": len(counterparties)}]
 
-    # Карта типов снимается с вложенной выгрузки и понадобится плоской.
+    # Карта типов снимается с вложенной выгрузки и применяется к плоской.
     types = type_map(counterparties)
+
+    flat_path = find_up(FLAT_DUMP)
+    if flat_path:
+        flat = read_flat(flat_path, types)
+        counterparties += flat
+        sources.append({"file": flat_path.name, "records": len(flat)})
+    else:
+        print(f"ВНИМАНИЕ: не найдена плоская выгрузка {FLAT_DUMP} — половина данных пропущена")
 
     return {
         "meta": {
