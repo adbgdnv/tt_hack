@@ -67,8 +67,31 @@ install -d -o www-data -g www-data -m 750 /opt/tt-hack/dataset
 ```
 
 `docker-compose.yml` объявляет `env_file: .env`, а `.env` в репозиторий не коммитится —
-**без него compose не стартует**. Создать `/opt/tt-hack/.env` с `API_ROOT_PATH=/api`
-(и с ключом LLM, когда появится `/chat`), права `600`, владелец `www-data`.
+**без него compose не стартует**.
+
+Этот файл **пишет автодеплой** — шаг «Прокинуть окружение бэкенда» в
+[.github/workflows/deploy.yml](../.github/workflows/deploy.yml) кладёт туда
+`API_ROOT_PATH`, `LLM_PROVIDER` (repository variable) и `LLM_API_KEY`
+(repository secret). Ключ уходит через stdin, а не аргументом команды: аргументы
+видны в `ps` на сервере.
+
+Поэтому файл принадлежит `ttdeploy` с правами `600` — это единственное, что деплой-пользователь
+может писать за пределами `/opt/tt-hack-preview`. Каталог `/opt/tt-hack` остаётся
+за `www-data`:
+
+```bash
+touch /opt/tt-hack/.env && chown ttdeploy:ttdeploy /opt/tt-hack/.env && chmod 600 /opt/tt-hack/.env
+```
+
+**Править `.env` руками бесполезно — следующий деплой затрёт.** Менять значения
+надо в настройках репозитория на GitHub.
+
+Новое значение подхватывается не сразу: контейнер читает окружение при старте,
+а автодеплой его намеренно не рестартует. После смены ключа:
+
+```bash
+cd /opt/tt-hack && docker compose up -d api
+```
 
 Блок `location ^~ /api/` — в [deploy/nginx/tt-hack-review.conf](nginx/tt-hack-review.conf).
 На сервере правится **вручную**: certbot дописал туда 443-блок и редирект с 80,

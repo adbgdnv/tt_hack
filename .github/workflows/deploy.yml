@@ -53,6 +53,28 @@ jobs:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: scripts/preview_deploy.sh
 
+      - name: Прокинуть окружение бэкенда
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -z "${LLM_API_KEY}" ]; then
+            echo "LLM_API_KEY не задан — пропускаю"; exit 0
+          fi
+          # Ключ уходит через stdin, а не аргументом: аргументы видны в ps на сервере.
+          # umask 077 — файл создаётся сразу с правами 600.
+          printf '%s\n' \
+            '# Создаётся деплоем (.github/workflows/deploy.yml). Правки руками затрутся.' \
+            'API_ROOT_PATH=/api' \
+            "LLM_PROVIDER=${LLM_PROVIDER:-groq}" \
+            "LLM_API_KEY=${LLM_API_KEY}" \
+          | ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'umask 077 && cat > /opt/tt-hack/.env'
+          echo "окружение записано в /opt/tt-hack/.env"
+          # Контейнер подхватит его при следующем `docker compose up -d api`:
+          # бэкенд обновляется вручную, автодеплой его намеренно не рестартует.
+
       - name: Итог
         if: always()
         run: |
