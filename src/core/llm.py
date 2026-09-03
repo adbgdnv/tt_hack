@@ -56,7 +56,13 @@ class LLMClient:
         if not self.api_key:
             raise RuntimeError("Нет LLM_API_KEY — задать в .env или в окружении")
 
-    def ask(self, messages: list[dict], *, max_tokens: int = 1200, temperature: float = 0.2) -> Answer:
+    def ask(
+        self,
+        messages: list[dict],
+        *,
+        max_tokens: int = 1200,
+        temperature: float = 0.2,
+    ) -> Answer:
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={
