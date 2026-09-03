@@ -9,8 +9,8 @@
     python3 scripts/audit_data.py            # покрытие полей
     python3 scripts/audit_data.py --traps    # только ловушки и распределения
 
-CSV разворачивается корректно, с разбором индексов `[i]` — в отличие от
-`core.mocks._csv_row_to_report`, который этого пока не умеет.
+Развёртка плоских ключей берётся из `core.normalize` — одна реализация на проект,
+чтобы сверка и сборка набора не разъезжались.
 """
 
 from __future__ import annotations
@@ -22,43 +22,16 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from core.normalize import unflatten  # noqa: E402
+
 csv.field_size_limit(2**31 - 1)
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "data" / "GetFullReportResponse.md"
 JSON_DUMP = ROOT / "data" / "contractors_audit.snapshot.json"
 CSV_DUMP = ROOT / "data" / "contractors_audit.snapshot_C12613591.csv"
-
-TOKEN = re.compile(r"([^.\[\]]+)(?:\[(\d+)\])?")
-
-
-def unflatten(row: dict) -> dict:
-    """`report.finReports[0].common.year` → {"finReports": [{"common": {"year": …}}]}"""
-    out: dict = {}
-    for flat, value in row.items():
-        if not flat.startswith("report.") or value in ("", None):
-            continue
-        tail = flat[len("report.") :]
-        steps = [(m.group(1), m.group(2)) for m in TOKEN.finditer(tail) if m.group(1)]
-        node: object = out
-        for i, (name, idx) in enumerate(steps):
-            last = i == len(steps) - 1
-            if idx is None:
-                if last:
-                    node[name] = value
-                else:
-                    node = node.setdefault(name, {})
-            else:
-                lst = node.setdefault(name, [])
-                k = int(idx)
-                while len(lst) <= k:
-                    lst.append({})
-                if last:
-                    lst[k] = value
-                else:
-                    node = lst[k]
-    return out
-
 
 def load() -> tuple[list[dict], list[dict]]:
     js = [r["report"] for r in json.loads(JSON_DUMP.read_text(encoding="utf-8"))]
