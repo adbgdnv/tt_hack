@@ -1,0 +1,29 @@
+# В контекст сборки не должно попадать ничего с данными кейсодателя:
+# ни симлинк на выгрузку, ни собранный набор. Данные приезжают томом и копированием.
+data
+dataset/
+
+.git
+.github
+specs
+docs
+temp
+tests
+preview
+deploy
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+node_modules/
+dist/
+
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.ruff_cache/
