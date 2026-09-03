@@ -66,3 +66,61 @@ export type ChatMessage =
   | { id: string; role: 'agent'; text: string; answer: AgentAnswer };
 
 export type HistoryItem = Pick<Counterparty, 'name' | 'inn' | 'bankRisk' | 'dataDate'>;
+
+// ─────────── Собранный отчёт: приходит с сервера готовым ───────────
+// Интерфейс его отображает, а не собирает. Правило «что важнее» — доменное знание,
+// и держать вторую его реализацию здесь значит гарантированно разойтись с сервером.
+
+/** Четыре разных «пусто». Смешивать их — значит выдавать «мы не знаем» за «всё чисто». */
+export type SectionState = 'signal' | 'filled' | 'empty' | 'not_applicable';
+
+export type ReportFactor = {
+  code: string;
+  /** Короткий заголовок для карточки. */
+  heading: string;
+  /** Текст из выгрузки кейсодателя, дословно. */
+  explanation: string;
+  weight: number;
+};
+
+export type ReportFact = {
+  label: string;
+  value: string | number;
+  /** 'money' форматируется компонентом дизайн-системы, а не вручную. */
+  kind: 'text' | 'count' | 'money';
+};
+
+export type ReportSectionData = {
+  key: string;
+  title: string;
+  state: SectionState;
+  /** Человеческая формулировка состояния — готовая, придумывать не надо. */
+  note: string;
+  factors: ReportFactor[];
+  /** То, что пользователь может сверить с источником. */
+  facts: ReportFact[];
+};
+
+export type RiskAssessment = {
+  /** Чья это оценка — банка или платформы ЗСК Банка России. */
+  source: string;
+  value: string;
+  /** false означает «оценить невозможно» — не низкий риск и не высокий. */
+  known: boolean;
+};
+
+export type CounterpartyReport = {
+  inn: string;
+  name: string;
+  is_entrepreneur: boolean;
+  status: string;
+  registered: string | null;
+  years: number | null;
+  bank_risk: RiskAssessment;
+  zsk_risk: RiskAssessment;
+  /** Уже в правильном порядке: разделы с сигналом первыми. */
+  sections: ReportSectionData[];
+  unknown_chapters: string[];
+  signals: number;
+  unknowns: number;
+};

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from core import repo, slim
+from core import report as report_view
 
 
 @asynccontextmanager
@@ -55,6 +57,15 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
 
 
+def _serialize(report: report_view.Report) -> dict:
+    """Представление в словарь. Состояние раздела уезжает строкой — интерфейсу
+    незачем знать про перечисления Python."""
+    payload = asdict(report)
+    for section in payload["sections"]:
+        section["state"] = section["state"].value
+    return payload
+
+
 @app.get("/health")
 def health() -> dict:
     """Проверка живости — и готовности отвечать данными.
@@ -74,6 +85,22 @@ def search(q: str, limit: int = 10) -> list[dict]:
     сообщает об этом, а не показывает сбой.
     """
     return [slim.slim(r) for r in repo.search(q, limit)]
+
+
+@app.get("/counterparties/{inn}/report")
+def get_report(inn: str) -> dict:
+    """Собранный отчёт: шапка, обе оценки риска, восемь разделов в порядке значимости.
+
+    Тем же представлением пользуется диалог — модель должна видеть ровно то, что видит
+    пользователь, иначе ответ разойдётся с экраном и проверить его будет нельзя.
+
+    Отобранная выдача по `/counterparties/{inn}` остаётся: она нужна MCP
+    и программному доступу.
+    """
+    record = repo.by_inn(inn)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    return _serialize(report_view.build(record))
 
 
 @app.get("/counterparties/{inn}")

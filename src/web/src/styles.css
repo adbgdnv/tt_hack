@@ -1231,3 +1231,101 @@ input:focus-visible,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─────────── Разделы собранного отчёта ─────────── */
+
+.report-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.report-section {
+  background: var(--color-light-bg-primary, #fff);
+  border: 1px solid var(--color-light-border-secondary, #dbdbd7);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+/* Пустые и неприменимые разделы приглушаются, но остаются на экране:
+   их отсутствие — тоже информация. */
+.report-section--muted {
+  opacity: 0.62;
+}
+
+.report-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.report-section__head h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.report-section__note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--color-light-text-secondary, #6b6b6b);
+}
+
+.report-section__factors {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.report-section__factors strong {
+  display: block;
+  font-size: 14px;
+}
+
+.report-section__factors p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-light-text-secondary, #6b6b6b);
+}
+
+.report-section__facts {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.report-section__facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.report-section__facts dt {
+  color: var(--color-light-text-secondary, #6b6b6b);
+}
+
+.report-section__facts dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Почти половина компаний не имеет ни одного сработавшего фактора —
+   это состояние должно читаться как ответ, а не как пустой экран. */
+.report-clean {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--color-light-bg-secondary, #f3f4f5);
+  font-size: 14px;
+}
+
+.bank-signal__source {
+  font-size: 12px;
+  color: var(--color-light-text-secondary, #6b6b6b);
+}

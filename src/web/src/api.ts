@@ -1,5 +1,5 @@
 import { findFixtureByInn, searchFixtures } from './fixtures';
-import type { BlockKey, Counterparty, ReportBlock, Signal } from './types';
+import type { BlockKey, Counterparty, CounterpartyReport, ReportBlock, Signal } from './types';
 
 const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 
@@ -161,4 +161,19 @@ export async function getCounterparty(inn: string): Promise<Counterparty | undef
   if (!response.ok) throw new Error('Не удалось загрузить отчёт');
   const raw = await response.json() as Counterparty | SlimApiReport;
   return adaptApiReport(raw);
+}
+
+/**
+ * Собранный отчёт с сервера.
+ *
+ * Порядок разделов и формулировки приходят готовыми: интерфейс их показывает,
+ * а не вычисляет. Заготовленных примеров здесь нет вовсе — отчёт либо настоящий,
+ * либо его нет.
+ */
+export async function getReport(inn: string): Promise<CounterpartyReport | undefined> {
+  if (!apiBase) return undefined;
+  const response = await fetch(`${apiBase}/counterparties/${encodeURIComponent(inn)}/report`);
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error('Не удалось загрузить отчёт');
+  return (await response.json()) as CounterpartyReport;
 }

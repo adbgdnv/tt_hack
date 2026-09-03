@@ -84,13 +84,27 @@ class Factor:
 
 
 @dataclass(frozen=True)
+class Fact:
+    """Число или строка раздела — то, что пользователь может сверить с источником.
+
+    `kind` отделяет деньги от прочего: форматирование сумм — забота интерфейса,
+    у него для этого есть компонент дизайн-системы, а собственная реализация
+    расходится с ней в мелочах.
+    """
+
+    label: str
+    value: object
+    kind: str = "text"
+
+
+@dataclass(frozen=True)
 class Section:
     key: str
     title: str
     state: State
     note: str
     factors: tuple[Factor, ...] = ()
-    facts: tuple[tuple[str, str], ...] = ()
+    facts: tuple[Fact, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -143,28 +157,24 @@ def _num(value: object) -> float:
         return 0.0
 
 
-def _money(value: object) -> str:
-    return f"{round(_num(value)):,}".replace(",", " ") + " ₽"
-
-
-def _section_facts(record: dict, key: str) -> tuple[tuple[str, str], ...]:
+def _section_facts(record: dict, key: str) -> tuple[Fact, ...]:
     """Числа раздела — то, что пользователь может сверить с исходником."""
     base = record.get("baseInfo") or {}
     if key == "registration":
         reg = base.get("registrationInfo") or {}
-        facts = [("Статус", (record.get("status") or {}).get("status") or "—")]
+        facts = [Fact("Статус", (record.get("status") or {}).get("status") or "—")]
         if reg.get("yearsFromRegistration") is not None:
-            facts.append(("Лет с регистрации", str(reg["yearsFromRegistration"])))
+            facts.append(Fact("Лет с регистрации", reg["yearsFromRegistration"], "count"))
         if base.get("address"):
-            facts.append(("Адрес", str(base["address"])))
+            facts.append(Fact("Адрес", str(base["address"])))
         return tuple(facts)
     if key == "courts":
         arb = record.get("arbitrationByStatus") or {}
         facts = []
         if arb.get("commonCount") is not None:
-            facts.append(("Всего дел", str(int(_num(arb["commonCount"])))))
+            facts.append(Fact("Всего дел", int(_num(arb["commonCount"])), "count"))
         if arb.get("commonAmount") is not None:
-            facts.append(("Сумма по делам", _money(arb["commonAmount"])))
+            facts.append(Fact("Сумма по делам", round(_num(arb["commonAmount"])), "money"))
         return tuple(facts)
     if key == "enforcement":
         proceedings = record.get("executionProceedings") or []
@@ -172,9 +182,9 @@ def _section_facts(record: dict, key: str) -> tuple[tuple[str, str], ...]:
         if not proceedings:
             return ()
         return (
-            ("Всего производств", str(len(proceedings))),
-            ("Из них активных", str(len(active))),
-            ("Сумма активных", _money(sum(_num(p.get("amount")) for p in active))),
+            Fact("Всего производств", len(proceedings), "count"),
+            Fact("Из них активных", len(active), "count"),
+            Fact("Сумма активных", round(sum(_num(p.get("amount")) for p in active)), "money"),
         )
     if key == "finances":
         reports = record.get("finReports") or []
@@ -183,24 +193,24 @@ def _section_facts(record: dict, key: str) -> tuple[tuple[str, str], ...]:
         common = reports[0].get("common") or {}
         facts = []
         if common.get("year") is not None:
-            facts.append(("Последний год", str(common["year"])))
+            facts.append(Fact("Последний год", str(common["year"])))
         if common.get("proceeds") is not None:
-            facts.append(("Выручка", _money(common["proceeds"])))
+            facts.append(Fact("Выручка", round(_num(common["proceeds"])), "money"))
         return tuple(facts)
     if key == "activity":
         main = (record.get("kindsOfActivityInfo") or {}).get("mainKindOfActivity") or {}
-        return (("Основной вид", str(main.get("description") or "—")),) if main else ()
+        return (Fact("Основной вид", str(main.get("description") or "—")),) if main else ()
     if key == "management":
         person = (record.get("foundersInfo") or {}).get("authPerson") or {}
         if not person:
             return ()
         return (
-            ("Руководитель", str(person.get("name") or "—")),
-            ("Должность", str(person.get("positionName") or "—")),
+            Fact("Руководитель", str(person.get("name") or "—")),
+            Fact("Должность", str(person.get("positionName") or "—")),
         )
     if key == "related":
         related = record.get("relatedCompanies") or []
-        return (("Связанных организаций", str(len(related))),) if related else ()
+        return (Fact("Связанных организаций", len(related), "count"),) if related else ()
     return ()
 
 
@@ -238,7 +248,7 @@ def _collect_factors(record: dict) -> tuple[dict[str, list[Factor]], tuple[str, 
     return by_section, tuple(unknown)
 
 
-def _state(key: str, factors: list[Factor], facts: tuple, entrepreneur: bool) -> State:
+def _state(key: str, factors: list[Factor], facts: tuple[Fact, ...], entrepreneur: bool) -> State:
     if entrepreneur and key in NOT_APPLICABLE_FOR_ENTREPRENEUR:
         return State.NOT_APPLICABLE
     if factors:

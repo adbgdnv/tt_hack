@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
 import { Skeleton } from '@alfalab/core-components-skeleton';
+import { Status } from '@alfalab/core-components-status';
 import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
 import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop';
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
-import { getCounterparty, searchCounterparties } from './api';
+import { getCounterparty, getReport, searchCounterparties } from './api';
 import { humanFactorLabels } from './fixtures';
-import type { BlockKey, Counterparty, HistoryItem, ReportBlock } from './types';
+import type { BlockKey, Counterparty, CounterpartyReport, HistoryItem, ReportBlock } from './types';
 import { BlockModal } from './components/BlockModal';
 import { ChatPanel } from './components/ChatPanel';
+import { ReportSection } from './components/ReportSection';
 import { FinancialChart } from './components/FinancialChart';
 
 const HISTORY_KEY = 'counterparty-check-history-v1';
@@ -188,10 +190,10 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
             <div className="history-grid">
               {history.map((item) => (
                 <button className="history-card" key={item.inn} type="button" onClick={() => onSelect(item.inn)}>
-                  <span className="bank-dot bank-dot--green" />
+                  <Status size={20} view="soft" color={riskColor(item.bankRisk)}>{item.bankRisk}</Status>
                   <h3>{item.name}</h3>
                   <p>ИНН {item.inn}</p>
-                  <div><span>Банковский риск: {item.bankRisk.toLowerCase()}</span><time>{item.dataDate}</time></div>
+                  <div><time>{item.dataDate}</time></div>
                 </button>
               ))}
             </div>
@@ -202,17 +204,18 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
   );
 }
 
-/** Цвет индикатора ЗСК. Отсутствие оценки — серый, а не зелёный:
+/** Цвет индикатора. Отсутствие оценки — серый, а не зелёный:
  *  «оценить невозможно» и «всё хорошо» — разные утверждения. */
-function bankTone(light: Counterparty['bankLight']): string {
-  if (light === 'Красный') return 'red';
-  if (light === 'Жёлтый') return 'yellow';
-  if (light === 'Нет данных') return 'grey';
-  return 'green';
+function riskColor(value: string): 'green' | 'orange' | 'red' | 'grey' {
+  if (value === 'Красный' || value === 'Высокий') return 'red';
+  if (value === 'Жёлтый' || value === 'Средний') return 'orange';
+  if (value === 'Зелёный' || value === 'Низкий') return 'green';
+  return 'grey';
 }
 
-function Dashboard({ company, onHome, onOpenBlock, chatContext, onToast, onAddCompare, compareCount, compared }: {
+function Dashboard({ company, report, onHome, onOpenBlock, chatContext, onToast, onAddCompare, compareCount, compared }: {
   company: Counterparty;
+  report: CounterpartyReport | null;
   onHome: () => void;
   onOpenBlock: (key: BlockKey, proof?: boolean) => void;
   chatContext: BlockKey | null;
@@ -237,8 +240,18 @@ function Dashboard({ company, onHome, onOpenBlock, chatContext, onToast, onAddCo
           </div>
           <div className="bank-signal">
             <div className="bank-signal__head"><span>Банковская оценка</span><span className="source-of-truth">Источник истины</span></div>
-            <div className="bank-signal__value"><span className={'bank-dot bank-dot--' + bankTone(company.bankLight)} />{company.bankRisk === 'Нет данных' ? 'Риск не оценён' : company.bankRisk + ' риск'}</div>
-            <div className="bank-signal__meta"><span>ЗСК: {company.bankLight}</span><time>Расчёт {company.dataDate}</time></div>
+            <div className="bank-signal__value">
+              <Status size={24} view="soft" color={riskColor(report?.bank_risk.value ?? company.bankRisk)}>
+                {report?.bank_risk.known === false ? 'Оценить невозможно' : (report?.bank_risk.value ?? company.bankRisk)}
+              </Status>
+              <span className="bank-signal__source">{report?.bank_risk.source ?? 'Скоринг банка'}</span>
+            </div>
+            <div className="bank-signal__meta">
+              <Status size={20} view="soft" color={riskColor(report?.zsk_risk.value ?? company.bankLight)}>
+                {report?.zsk_risk.known === false ? 'Нет оценки' : (report?.zsk_risk.value ?? company.bankLight)}
+              </Status>
+              <span className="bank-signal__source">Платформа ЗСК Банка России</span>
+            </div>
           </div>
           <div className="report-actions">
             <ButtonDesktop size={40} view="secondary" onClick={() => onToast('PDF-снимок отчёта сохранён')}>↓ PDF</ButtonDesktop>
@@ -259,13 +272,28 @@ function Dashboard({ company, onHome, onOpenBlock, chatContext, onToast, onAddCo
         <div className="dashboard-layout">
           <section>
             <div className="blocks-heading">
-              <div><span className="eyebrow">Данные отчёта</span><h2>На что обратить внимание</h2></div>
-              <TooltipDesktop content="Каждый индикатор — ориентир на основе данных своего блока, не банковская оценка">
-                <span className="indicator-legend"><span className="signal signal--yellow" /> Как читать индикаторы</span>
+              <div>
+                <span className="eyebrow">Данные отчёта</span>
+                <h2>На что обратить внимание</h2>
+              </div>
+              <TooltipDesktop content="Разделы упорядочены по наличию сигнала. Пустой раздел значит «оценить невозможно», а не «рисков нет»">
+                <span className="indicator-legend">Как читать разделы</span>
               </TooltipDesktop>
             </div>
-            <div className="blocks-grid">
-              {blockOrder.map((key) => <RiskBlockCard key={key} block={company.blocks[key]} onOpen={() => onOpenBlock(key)} />)}
+
+            {/* Состояние «ничего не сработало» — у 83 компаний из 200, то есть почти
+                половина случаев. Это ответ, а не пустой экран. */}
+            {report && report.signals === 0 && (
+              <p className="report-clean">
+                По имеющимся данным ничего не сработало.
+                {report.unknowns > 0 && ` Проверить не удалось разделов: ${report.unknowns}.`}
+              </p>
+            )}
+
+            <div className="report-sections">
+              {report
+                ? report.sections.map((section) => <ReportSection key={section.key} section={section} />)
+                : blockOrder.map((key) => <RiskBlockCard key={key} block={company.blocks[key]} onOpen={() => onOpenBlock(key)} />)}
             </div>
             {company.financials && (
               <section className="finance-card">
@@ -295,6 +323,9 @@ export default function App() {
   // «сервис недоступен» и «такой компании нет» это разные ответы.
   const [loadFailed, setLoadFailed] = useState(false);
   const [company, setCompany] = useState<Counterparty | null>(null);
+  // Собранный отчёт с сервера. null означает «сервер недоступен» —
+  // тогда показываются заготовленные примеры как запасной путь.
+  const [report, setReport] = useState<CounterpartyReport | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
   const [homeChat, setHomeChat] = useState(false);
   const [modalBlock, setModalBlock] = useState<BlockKey | null>(null);
@@ -339,6 +370,7 @@ export default function App() {
     setSuggestions([]);
     setNotFound(false);
     setLoadFailed(false);
+    setReport(null);
     setSearching(true);
     setView('dashboard');
     setCompany(null);
@@ -351,6 +383,8 @@ export default function App() {
       }
       setCompany(found);
       setChatContext(null);
+      // Отчёт грузится отдельно: его отсутствие не должно ронять экран целиком.
+      getReport(inn).then((r) => setReport(r ?? null)).catch(() => setReport(null));
       const item: HistoryItem = { name: found.name, inn: found.inn, bankRisk: found.bankRisk, dataDate: found.dataDate };
       const nextHistory = [item, ...history.filter((entry) => entry.inn !== found.inn)].slice(0, 6);
       setHistory(nextHistory);
@@ -425,6 +459,7 @@ export default function App() {
       ) : company ? (
         <Dashboard
           company={company}
+          report={report}
           onHome={goHome}
           onOpenBlock={openBlock}
           chatContext={chatContext}

@@ -175,3 +175,33 @@ def test_у_всех_предпринимателей_финансы_непри�
     for record in ип:
         fin = next(s for s in build(record).sections if s.key == "finances")
         assert fin.state is State.NOT_APPLICABLE
+
+
+# ─────────────────────────── ручка ───────────────────────────
+
+
+@нужен_набор
+def test_ручка_отдаёт_собранный_отчёт():
+    from fastapi.testclient import TestClient
+
+    from api.main import app
+
+    with TestClient(app) as client:
+        response = client.get("/counterparties/5032257375/report")
+        assert response.status_code == 200
+        payload = response.json()
+        assert len(payload["sections"]) == 8
+        assert payload["sections"][0]["state"] == "signal"
+        assert payload["bank_risk"]["source"] == "Скоринг банка"
+
+
+@нужен_набор
+def test_ручка_отвечает_404_на_отсутствующий_инн():
+    from fastapi.testclient import TestClient
+
+    from api.main import app
+
+    with TestClient(app) as client:
+        response = client.get("/counterparties/0000000000/report")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Компания не найдена"
