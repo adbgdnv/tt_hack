@@ -1,6 +1,6 @@
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { ModalDesktop } from '@alfalab/core-components-modal/desktop';
-import { Tag } from '@alfalab/core-components-tag';
+import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
 import type { BlockKey, Counterparty } from '../types';
 import { FinancialChart } from './FinancialChart';
 

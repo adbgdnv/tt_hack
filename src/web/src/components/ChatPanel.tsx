@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
-import { Tag } from '@alfalab/core-components-tag';
+import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
 import { blockQuestions, scenarioAnswer } from '../fixtures';
 import type { AgentAnswer, BlockKey, ChatMessage, Counterparty, Proof } from '../types';
 

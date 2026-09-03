@@ -9,10 +9,14 @@
     "preview": "vite preview --host 0.0.0.0 --port 5173"
   },
   "dependencies": {
+    "@alfalab/core-components-amount": "^5.1.1",
     "@alfalab/core-components-button": "^13.2.2",
+    "@alfalab/core-components-collapse": "^6.0.3",
     "@alfalab/core-components-input": "^17.2.0",
     "@alfalab/core-components-modal": "^11.0.15",
+    "@alfalab/core-components-plate": "^9.0.10",
     "@alfalab/core-components-skeleton": "^7.0.4",
+    "@alfalab/core-components-status": "^5.1.0",
     "@alfalab/core-components-tag": "^10.3.0",
     "@alfalab/core-components-themes": "^15.2.1",
     "@alfalab/core-components-toast-plate": "^9.1.6",

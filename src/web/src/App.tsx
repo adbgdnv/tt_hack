@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
 import { Skeleton } from '@alfalab/core-components-skeleton';
-import { Tag } from '@alfalab/core-components-tag';
+import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
 import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop';
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { getCounterparty, searchCounterparties } from './api';
