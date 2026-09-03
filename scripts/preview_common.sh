@@ -9,10 +9,14 @@
 # (FR-005) — все операции ограничены путями под PREVIEW_ROOT.
 
 # --- Пути. Всё, что делают скрипты, лежит строго под PREVIEW_ROOT. --------------
-: "${PREVIEW_ROOT:=/opt/tt-hack}"
+# PREVIEW_ROOT — каталог АРТЕФАКТОВ деплоя, отдельный от git-клона и от данных ревью.
+: "${PREVIEW_ROOT:=/opt/tt-hack-preview}"
 RELEASES_DIR="${PREVIEW_ROOT}/releases"
-CURRENT_LINK="${PREVIEW_ROOT}/preview"
+CURRENT_LINK="${PREVIEW_ROOT}/current"
 LOCK_FILE="${PREVIEW_ROOT}/.deploy.lock"
+# BIN_DIR используется в preview_deploy.sh (CI-режим синкает сюда скрипты).
+# shellcheck disable=SC2034
+BIN_DIR="${PREVIEW_ROOT}/bin"
 : "${KEEP_RELEASES:=5}"
 : "${PREVIEW_BASE_URL:=https://tt-hack-review.72.56.16.44.sslip.io}"
 
@@ -34,7 +38,7 @@ die()  { printf '%s ERROR %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; exit "${2:-1}";
 assert_safe_path() {
   case "$1" in
     "${RELEASES_DIR}"/* | "${CURRENT_LINK}" | "${CURRENT_LINK}.tmp" | "${LOCK_FILE}") : ;;
-    *) die "путь вне разрешённой зоны автодеплоя: $1" ;;
+    *) die "путь вне разрешённой зоны автодеплоя (${PREVIEW_ROOT}): $1" ;;
   esac
 }
 

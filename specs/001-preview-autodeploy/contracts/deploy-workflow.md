@@ -37,9 +37,11 @@ concurrency:
 | 4 | Запустить `scripts/preview_deploy.sh` (режим CI) с `DEPLOY_HOST`/`DEPLOY_USER` в env | fail, симлинк на сервере не тронут |
 | 5 | Вывести summary в `$GITHUB_STEP_SUMMARY`: коммит, статус сборки web, итог job, ссылку на лог шага 4 (в нём — коды smoke) | — |
 
-Шаг 4 собирает staging и rsync-ит релиз на сервер, затем по ssh запускает
-`preview_deploy.sh --finalize <id>` на сервере — switch, smoke, prune. Логика в скрипте, не в
-YAML, чтобы ручной запуск (`--local`) был идентичен (FR-010).
+Шаг 4 собирает staging, rsync-ит релиз в `/opt/tt-hack-preview/releases/<id>/` и свежие
+`scripts/preview_*.sh` в `/opt/tt-hack-preview/bin/`, затем по ssh запускает
+`bin/preview_deploy.sh --finalize <id>` на сервере — switch, smoke, prune. Никакого `git pull`
+на сервере: git-клон автодеплою не нужен. Логика в скрипте, не в YAML, чтобы ручной запуск
+(`--local` из клона) был идентичен (FR-010).
 
 ## Передача секретов в шаг
 
@@ -56,7 +58,7 @@ env:
 ## Наблюдаемое поведение (для приёмки)
 
 - CI красный на коммите → `deploy.yml` job `skipped`, на сервере ничего не поменялось.
-- CI зелёный → в течение 10 мин симлинк `/opt/tt-hack/preview` указывает на новый релиз.
-- Любой шаг упал → job красный, `readlink /opt/tt-hack/preview` не изменился (кроме случая
+- CI зелёный → в течение 10 мин симлинк `/opt/tt-hack-preview/current` указывает на новый релиз.
+- Любой шаг упал → job красный, `readlink /opt/tt-hack-preview/current` не изменился (кроме случая
   R5-компромисса: smoke упал после switch → скрипт сам откатил, job красный).
 - Два `workflow_run` подряд → второй ждёт первого (concurrency), не отменяя.

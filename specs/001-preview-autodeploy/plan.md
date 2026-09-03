@@ -9,7 +9,7 @@
 По push в `main` GitHub Actions после зелёного CI выкладывает превью-статику (`preview/` +
 сборка `src/web`, если она есть) на общий сервер: `rsync` по SSH deploy-ключу в новый
 каталог-релиз, smoke-check `200` по обязательным страницам, атомарное переключение симлинка
-`/opt/tt-hack/preview` на релиз. Предыдущий релиз сохраняется, откат — bash-скрипт на сервере.
+`/opt/tt-hack-preview/current` на релиз. Предыдущий релиз сохраняется, откат — bash-скрипт на сервере.
 Ручная выкладка — тот же скрипт. Kubernetes и docker registry не используются осознанно.
 
 ## Technical Context
@@ -21,8 +21,8 @@
 `curl` для smoke-check; Node.js LTS + `npm` на раннере для сборки `src/web` (только когда
 появится `src/web/package.json`). Actions: `actions/checkout@v4`, `actions/setup-node@v4`.
 
-**Storage**: файловая система сервера. Релизы — `/opt/tt-hack/releases/<timestamp>-<sha>/`,
-текущий — симлинк `/opt/tt-hack/preview` → последний успешный релиз. Хранить последние N=5
+**Storage**: файловая система сервера. Релизы — `/opt/tt-hack-preview/releases/<timestamp>-<sha>/`,
+текущий — симлинк `/opt/tt-hack-preview/current` → последний успешный релиз. Хранить последние N=5
 релизов, старые удалять.
 
 **Testing**: `bats` не тянем. Проверка деплой-скриптов — `shellcheck` в CI (добавить шаг) +
@@ -37,14 +37,16 @@
 **Performance Goals**: от мержа до обновлённого превью ≤ 10 мин (SC-001); откат < 2 мин
 (SC-004). rsync инкрементальный — типовая выкладка секунды.
 
-**Constraints**: не трогать `/opt/tt-hack-review/`, сервис `tt-hack-vibe-debug`, контейнеры
-`api`/`mcp` (FR-005) — скрипты оперируют только путями под `/opt/tt-hack/{releases,preview}` и
-не вызывают `systemctl`/`docker`. Секреты только в GitHub Secrets, не в логах (FR-008/014).
+**Constraints**: не трогать `/opt/tt-hack-review/`, git-клон `/opt/tt-hack`, сервис
+`tt-hack-vibe-debug`, контейнеры `api`/`mcp` (FR-005) — скрипты оперируют только путями под
+`/opt/tt-hack-preview/` и не вызывают `systemctl`/`docker`. Секреты только в GitHub Secrets
+(4) и на сервере (Basic Auth), не в логах (FR-008/014).
 Deploy-ключ — минимальные права (FR-009). Одновременно пишет один запуск (FR-013). Переключение
 атомарно, само-откат при провале smoke (FR-007a/007b).
 
 **Scale/Scope**: один сервер, один контур (`main` → общий превью). ~1 workflow, ~2 bash-скрипта,
-~1 конфиг systemd/sudoers не нужен (деплой-юзер владеет `/opt/tt-hack/`).
+systemd/sudoers не нужны (деплой-юзер владеет `/opt/tt-hack-preview/`). Одна правка Nginx
+`root` + `reload` при первичной настройке.
 
 ## Constitution Check
 
@@ -58,7 +60,7 @@ Deploy-ключ — минимальные права (FR-009). Одноврем
 | IV. Требования кейсодателя | «демонстрация локальная, деплой не нужен» — но общий превью для ревью команды уже есть и используется; фича автоматизирует существующее, не добавляет прод | ✅ в рамках |
 | V. Отбор полей | не относится | n/a |
 | Рабочий процесс: CI зелёный перед merge | фича усиливает — деплой только после зелёного CI | ✅ соответствует |
-| Секреты не в репозитории | deploy-ключ и Basic Auth — в GitHub Secrets и на сервере | ✅ соответствует |
+| Секреты не в репозитории | deploy-ключ и `DEPLOY_*` — в GitHub Secrets; Basic Auth — на сервере | ✅ соответствует |
 
 Нарушений нет. Complexity Tracking не заполняется.
 
@@ -94,25 +96,38 @@ specs/001-preview-autodeploy/
     └── deploy.yml        # НОВЫЙ — триггер workflow_run(CI, main) + workflow_dispatch
 
 scripts/
-├── preview_deploy.sh     # НОВЫЙ — сборка src/web (опц.), rsync в релиз, smoke-check, switch
-├── preview_rollback.sh   # НОВЫЙ — переключить симлинк на предыдущий релиз
-└── preview_smoke.sh      # НОВЫЙ — curl 200 по списку путей через Basic Auth (общий для CI и ручного)
+├── preview_common.sh     # НОВЫЙ — общие функции: пути, flock, atomic_switch, find_previous, prune
+├── preview_deploy.sh     # НОВЫЙ — сборка src/web (опц.), rsync в релиз + bin/, smoke, switch
+├── preview_rollback.sh   # НОВЫЙ — переключить симлинк current на предыдущий релиз
+└── preview_smoke.sh      # НОВЫЙ — curl 200 по списку путей через Basic Auth (общий)
 
 deploy/
 ├── nginx/
-│   └── tt-hack-review.conf   # существует — БЕЗ изменений: root уже /opt/tt-hack/preview, он станет симлинком (research R2)
+│   └── tt-hack-review.conf   # ПРАВКА: root → /opt/tt-hack-preview/current (одна строка), + reload
 ├── systemd/                  # существует — без изменений
-└── PREVIEW-DEPLOY.md         # НОВЫЙ — runbook: первичная настройка сервера, deploy-юзер, ключ, ручная выкладка, откат
+└── PREVIEW-DEPLOY.md         # НОВЫЙ — runbook: настройка сервера, deploy-юзер, ключ, ручная выкладка, откат
 
 src/web/                      # источник фронта; сборка подхватывается когда появится package.json
-preview/                      # источник статики — без изменений
+preview/                      # источник статики — без изменений (git-tracked, НЕ становится симлинком)
+```
+
+На сервере (создаётся ранбуком, вне репозитория):
+
+```text
+/opt/tt-hack-preview/
+├── current   → releases/<id>     # Nginx root; переключает preview_deploy.sh
+├── releases/<id>/                # артефакты, максимум 5
+└── bin/                          # preview_*.sh, CI синкает перед --finalize
 ```
 
 **Structure Decision**: отдельный слой автодеплоя. Никакого кода в `src/` — Принцип II не
 затрагивается. `deploy.yml` не расширяет `ci.yml`, а слушает его через `workflow_run`: CI
 остаётся единственным местом про тесты/линт, деплой — отдельная ответственность. Скрипты в
 `scripts/` (там уже живут `vibe_debug_server.py` и пр.), исполняются и на раннере, и на сервере
-идентично — ручная выкладка = запуск того же `preview_deploy.sh` с сервера (FR-010).
+идентично — ручная выкладка = запуск того же `preview_deploy.sh --local` из git-клона на
+сервере (FR-010). Артефакты деплоя (`/opt/tt-hack-preview/`) отделены от git-клона
+(`/opt/tt-hack`) и данных ревью (`/opt/tt-hack-review/`) — автодеплою git-клон не нужен,
+`git pull` на сервере не выполняется (research R2).
 
 ## Complexity Tracking
 

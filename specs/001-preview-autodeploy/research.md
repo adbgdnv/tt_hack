@@ -22,8 +22,10 @@ Phase 0. Разрешение открытых вопросов из Technical C
 
 ## R2. Атомарное переключение версии
 
-**Decision**: раскладка `releases/<UTC-timestamp>-<short-sha>/`, текущая версия — симлинк
-`/opt/tt-hack/preview` → конкретный релиз. Переключение: `ln -sfn <release> /opt/tt-hack/preview.tmp && mv -T /opt/tt-hack/preview.tmp /opt/tt-hack/preview`.
+**Decision**: отдельный каталог артефактов `/opt/tt-hack-preview/`, раскладка
+`releases/<UTC-timestamp>-<short-sha>/`, текущая версия — симлинк
+`/opt/tt-hack-preview/current` → конкретный релиз. Переключение:
+`ln -sfn <release> …/current.tmp && mv -T …/current.tmp …/current`.
 `mv -T` над симлинком — атомарный `rename(2)`, посетитель Nginx видит либо старый, либо новый
 каталог целиком (FR-007a).
 
@@ -31,16 +33,26 @@ Phase 0. Разрешение открытых вопросов из Technical C
 старая, а при провале — битую смесь (нарушение FR-007). Симлинк-свитч убирает окно и даёт
 бесплатный откат (R3).
 
-**Требование к Nginx**: `root` в `tt-hack-review.conf` должен указывать на
-`/opt/tt-hack/preview` (путь симлинка), и `disable_symlinks off` (дефолт). Сейчас в конфиге
-`root /opt/tt-hack/preview;` — путь совпадает, менять конфиг не нужно, только превратить этот
-путь из каталога в симлинк при первичной настройке.
+**Почему отдельный каталог, а не `/opt/tt-hack/preview`** (исправление первоначального
+плана): `preview/` — git-tracked каталог в репозитории, а `/opt/tt-hack` на сервере — рабочий
+git-клон (его использует `tt-hack-vibe-debug` и ручная выкладка). Превратить
+`/opt/tt-hack/preview` в симлинк = сломать `git pull` на сервере (typechange +
+«local changes would be overwritten», как только кто-то поправит `preview/*.html`). Разводим:
+исходники в `/opt/tt-hack`, артефакты деплоя в `/opt/tt-hack-preview`. Побочный плюс: CI
+больше не делает `git pull` на сервере — синкает `scripts/preview_*.sh` в
+`/opt/tt-hack-preview/bin/` и запускает `--finalize` оттуда; git-клон автодеплою вообще не
+нужен.
+
+**Требование к Nginx**: `root` в `tt-hack-review.conf` → `/opt/tt-hack-preview/current`
+(одна строка) + `nginx -t && systemctl reload nginx` один раз при настройке. `disable_symlinks
+off` — дефолт.
 
 **Alternatives considered**:
 - `rsync --delete` в каталог + резервная копия перед выкладкой — дольше, окно рассинхрона
   остаётся.
--两 каталога `blue`/`green` + правка `root` в Nginx + `nginx -s reload` — reload на каждый
-  деплой, лишняя связанность с Nginx, нужен sudo.
+- blue/green каталоги + правка `root` в Nginx + `reload` на каждый деплой — reload на каждый
+  деплой, лишняя связанность с Nginx.
+- `git update-index --skip-worktree preview` в клоне — хрупко, легко потерять при операциях с git.
 
 ## R3. Откат
 
@@ -91,9 +103,10 @@ smoke-check про доступность, не про рендер (Assumptions
 
 ## R6. Deploy-доступ и права
 
-**Decision**: на сервере — пользователь `ttdeploy`, владелец `/opt/tt-hack/releases/`,
-`/opt/tt-hack/preview` (симлинк) и права на `preview/`-контент. НЕ владелец
-`/opt/tt-hack-review/` и без `sudo`. SSH — отдельная пара ключей, приватный в
+**Decision**: на сервере — пользователь `ttdeploy`, владелец всего `/opt/tt-hack-preview/`
+(`releases/`, симлинк `current`, `bin/`) и читатель `/opt/tt-hack/scripts` для ручной
+`--local`. НЕ владелец `/opt/tt-hack-review/` и без `sudo`. SSH — отдельная пара ключей,
+приватный в
 `DEPLOY_SSH_KEY`, публичный в `~ttdeploy/.ssh/authorized_keys` с
 `command="…"`-ограничением необязательно (rsync по ssh нужен интерактивный shell) — вместо
 этого ограничиваем правами ФС. `known_hosts` пиновать через `ssh-keyscan` в workflow (записать
@@ -115,7 +128,7 @@ Basic Auth для smoke-check в CI **не хранится** — он на се
 
 **Decision**: `concurrency: { group: preview-deploy, cancel-in-progress: false }` на уровне
 job в `deploy.yml`. `cancel-in-progress: false` — не рвать текущую выкладку на середине rsync,
-дать завершиться, потом пустить следующую. На сервере дополнительно `flock /opt/tt-hack/.deploy.lock`
+дать завершиться, потом пустить следующую. На сервере дополнительно `flock /opt/tt-hack-preview/.deploy.lock`
 в `preview_deploy.sh` — защита от «ручная выкладка + автодеплой одновременно» (edge case).
 
 **Rationale**: FR-013 + edge case «два мержа подряд» / «ручная и авто одновременно».

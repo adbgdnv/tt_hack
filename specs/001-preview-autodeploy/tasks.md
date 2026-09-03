@@ -12,10 +12,7 @@ description: "Task list — Автодеплой превью"
 **Tests**: автотестов на bash не заводим (Принцип III). Контроль качества — `shellcheck` в CI
 (T022) + прогон `quickstart.md` (T024). Сам smoke-check — исполняемая проверка выкладки.
 
-**Статус (2026-09-03)**: 24/26 + Phase 7 (T028, T030, T031, T032) сделано и проверено локально
-(`bash -n`, `shellcheck` чисто, `run_smoke` с `SMOKE_PATHS` и без, YAML валиден). Осталось
-**T027** и **T029** (≡ T024/T025) — им нужен живой сервер: настроенный `ttdeploy`, 4 секрета,
-реальный прогон `deploy.yml`.
+**Статус (2026-09-03)**:  24/26 + Phase 7 (T028, T030-T033) сделано, проверено локально (shellcheck чисто, функции релизов с новым PREVIEW_ROOT/current, YAML). T033 — развёл артефакты (/opt/tt-hack-preview) от git-клона: правит и Nginx root (одна строка + reload при настройке). Осталось T027/T029 — только живой прогон.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -250,3 +247,12 @@ Setup (T001-T002)
       `package.json`, но без закоммиченного `package-lock.json`, шаг упадёт («lock file is not
       found»). Либо снять кэш до появления lockfile, либо задокументировать требование
       коммитить `package-lock.json` per FR-002 (partial).
+
+- [X] T033 Развести артефакты деплоя и git-клон: `PREVIEW_ROOT=/opt/tt-hack-preview`
+      (было `/opt/tt-hack`), симлинк `current` (было `preview`), CI синкает `preview_*.sh`
+      в `bin/` вместо `git pull` на сервере. Причина: `preview/` — git-tracked, симлинк на
+      его месте ломает `git pull` в `/opt/tt-hack` при финализации. Nginx `root` →
+      `/opt/tt-hack-preview/current` (одна строка + reload). Приведены `preview_common.sh`,
+      `preview_deploy.sh`, `deploy/nginx/tt-hack-review.conf`, `PREVIEW-DEPLOY.md`, spec
+      Assumptions, plan, research R2/R6, data-model, все три контракта, quickstart per
+      plan: storage decision, research R2 (contradicts исходного плана, найдено при настройке).
