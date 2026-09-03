@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from core import mocks, repo, slim
+from core import repo, slim
 
 mcp = FastMCP("counterparty-checker")
 
@@ -27,7 +27,7 @@ def search_counterparty(query: str, limit: int = 10) -> list[dict]:
     Возвращает краткие карточки. Если ничего не найдено — пустой список,
     это значит «в базе нет», а не «ошибка».
     """
-    return [slim.slim(r) for r in mocks.search(query, limit)]
+    return [slim.slim(r) for r in repo.search(query, limit)]
 
 
 @mcp.tool()

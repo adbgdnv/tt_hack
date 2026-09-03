@@ -95,12 +95,13 @@ function RiskBlockCard({ block, onOpen }: { block: ReportBlock; onOpen: () => vo
   );
 }
 
-function HomeScreen({ query, setQuery, suggestions, searching, notFound, history, homeChat, setHomeChat, onSearch, onSelect }: {
+function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFailed, history, homeChat, setHomeChat, onSearch, onSelect }: {
   query: string;
   setQuery: (value: string) => void;
   suggestions: Counterparty[];
   searching: boolean;
   notFound: boolean;
+  loadFailed: boolean;
   history: HistoryItem[];
   homeChat: boolean;
   setHomeChat: (value: boolean) => void;
@@ -145,6 +146,12 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, history
               <div className="inline-error" role="status">
                 <strong>Компании по этому ИНН не существует</strong>
                 <span>Проверьте цифры или введите другой ИНН. Поиск остаётся доступен.</span>
+              </div>
+            )}
+            {loadFailed && (
+              <div className="inline-error" role="status">
+                <strong>Не удалось получить данные</strong>
+                <span>Это сбой сервиса, а не утверждение о компании — про неё мы сейчас ничего сказать не можем. Попробуйте ещё раз.</span>
               </div>
             )}
           </form>
@@ -284,6 +291,9 @@ export default function App() {
   const [suggestions, setSuggestions] = useState<Counterparty[]>([]);
   const [searching, setSearching] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  // Сбой связи — не утверждение о компании. Смешивать их нельзя:
+  // «сервис недоступен» и «такой компании нет» это разные ответы.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [company, setCompany] = useState<Counterparty | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
   const [homeChat, setHomeChat] = useState(false);
@@ -328,6 +338,7 @@ export default function App() {
     setQueryState(inn);
     setSuggestions([]);
     setNotFound(false);
+    setLoadFailed(false);
     setSearching(true);
     setView('dashboard');
     setCompany(null);
@@ -346,7 +357,7 @@ export default function App() {
       writeHistory(nextHistory);
     } catch {
       setView('home');
-      setNotFound(true);
+      setLoadFailed(true);
     } finally {
       setSearching(false);
     }
@@ -404,6 +415,7 @@ export default function App() {
           suggestions={suggestions}
           searching={searching}
           notFound={notFound}
+          loadFailed={loadFailed}
           history={history}
           homeChat={homeChat}
           setHomeChat={setHomeChat}

@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from core import mocks, repo, slim
+from core import repo, slim
 
 
 @asynccontextmanager
@@ -59,8 +59,12 @@ def health() -> dict:
 
 @app.get("/counterparties/search")
 def search(q: str, limit: int = 10) -> list[dict]:
-    """Поиск по названию или ИНН."""
-    return [slim.slim(r) for r in mocks.search(q, limit)]
+    """Поиск по названию или ИНН.
+
+    Пустой список — не ошибка: он означает «в наборе таких нет», и интерфейс
+    сообщает об этом, а не показывает сбой.
+    """
+    return [slim.slim(r) for r in repo.search(q, limit)]
 
 
 @app.get("/counterparties/{inn}")
