@@ -1,0 +1,66 @@
+name: Deploy preview
+
+# Слушает завершение CI на main. Публикует превью только если CI зелёный (FR-003).
+# Ручной запуск — workflow_dispatch (обходит гард на conclusion).
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+# Одновременно выкладывается не более одной версии (FR-013). Текущую не рвём.
+concurrency:
+  group: preview-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # для workflow_run — тот же коммит, что прошёл CI; для dispatch — main
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Есть ли фронтенд для сборки
+        id: web
+        run: |
+          if [ -f src/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.web.outputs.present == 'true'
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Настроить SSH
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Выложить превью
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: scripts/preview_deploy.sh
+
+      - name: Итог
+        if: always()
+        run: |
+          {
+            echo "### Deploy preview"
+            echo ""
+            echo "- Коммит: \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
+            echo "- Фронтенд: ${{ steps.web.outputs.present == 'true' && 'сборка' || 'пропуск (нет package.json)' }}"
+            echo "- Результат job: ${{ job.status }}"
+            echo ""
+            echo "Логи шага «Выложить превью» содержат коды smoke-check по каждой странице."
+          } >> "$GITHUB_STEP_SUMMARY"
