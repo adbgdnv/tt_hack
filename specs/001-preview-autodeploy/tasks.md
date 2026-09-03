@@ -217,3 +217,36 @@ Setup (T001-T002)
 
 Порядок поставки: `Setup → Foundational → US1 (демо: авто-публикация) → US2 (демо: провал
 безопасен) → US3 (демо: откат) → Polish`.
+
+---
+
+## Phase 7: Convergence
+
+Сгенерировано `/speckit-converge` 2026-09-03 после реализации. Каждая задача трассируется к
+источнику (`FR-*`, `US*/AC*`, `SC-*`, `plan:*`) и типу разрыва (`missing` / `partial` /
+`contradicts` / `unrequested`).
+
+- [ ] T027 Прогнать `specs/001-preview-autodeploy/quickstart.md` (сценарии 1–6) против живого
+      сервера и отметить чек-лист приёмки; расхождения — новыми задачами per US1/US2/US3
+      acceptance, SC-001/003/004 (missing). Блокируется настройкой сервера и секретов.
+- [ ] T028 Разрешить расхождение по хранению Basic Auth: `FR-008` (обновлён в analyze) требует
+      «логин/пароль Basic Auth … в секретах репозитория», а реализация читает его из
+      `~ttdeploy/.preview-smoke-auth` на сервере. `data-model.md` (DeployAccess) и
+      `contracts/deploy-workflow.md` / `contracts/deploy-scripts.md` всё ещё описывают
+      `PREVIEW_BASIC_AUTH` как GitHub Secret. Выбрать один вариант и привести к нему спеку,
+      data-model и контракты per FR-008, plan: R6 (contradicts).
+- [ ] T029 Проверить лог реального прогона `deploy.yml`: ни `DEPLOY_SSH_KEY`, ни
+      `DEPLOY_KNOWN_HOSTS`, ни Basic Auth не видны в открытом виде (в шагах и в
+      `$GITHUB_STEP_SUMMARY`) per FR-014, SC-006 (missing). Блокируется первым живым прогоном.
+- [ ] T030 Добавить в лог выкладки явную строку контура (`контур: preview (main)`) — в
+      `finalize()` `scripts/preview_deploy.sh` и/или в summary `deploy.yml`; сейчас пишутся
+      коммит, коды smoke и итог, но не контур per FR-012 (partial).
+- [ ] T031 Свести `SMOKE_PATHS`: env упомянут в шапке `scripts/preview_deploy.sh` и в
+      `contracts/deploy-scripts.md`, но `run_smoke()` в `preview_common.sh` не передаёт его в
+      `preview_smoke.sh` (всегда дефолтные пути). Либо пробросить `${SMOKE_PATHS:-}` в
+      `run_smoke`, либо убрать упоминание per contracts/deploy-scripts.md (partial).
+- [ ] T032 `actions/setup-node` в `deploy.yml` использует `cache: npm` +
+      `cache-dependency-path: src/web/package-lock.json`; когда `src/web` появится с
+      `package.json`, но без закоммиченного `package-lock.json`, шаг упадёт («lock file is not
+      found»). Либо снять кэш до появления lockfile, либо задокументировать требование
+      коммитить `package-lock.json` per FR-002 (partial).
