@@ -43,8 +43,14 @@ build_staging() {
   local staging="$1" web="skipped"
 
   if [ "${NO_WEB}" -eq 0 ] && [ -f "${REPO_DIR}/src/web/package.json" ]; then
-    log "src/web: сборка (npm ci && npm run build)"
-    ( cd "${REPO_DIR}/src/web" && npm ci --no-audit --no-fund && npm run build )
+    log "src/web: сборка (npm ci && npm run build), VITE_API_BASE=${VITE_API_BASE:-/api}"
+    # Относительный путь, а не адрес сервера: запрос идёт на тот же origin, поэтому
+    # действует та же basic-авторизация и не нужен CORS. Проксирование /api/ на
+    # localhost:8000 настроено в deploy/nginx/tt-hack-review.conf.
+    # Без этой переменной фронт молча работает на встроенных примерах.
+    ( cd "${REPO_DIR}/src/web" \
+        && npm ci --no-audit --no-fund \
+        && VITE_API_BASE="${VITE_API_BASE:-/api}" npm run build )
     [ -d "${REPO_DIR}/src/web/dist" ] || die "src/web: сборка не дала dist/"
     rsync -a "${REPO_DIR}/src/web/dist/" "${staging}/"
     web="built"

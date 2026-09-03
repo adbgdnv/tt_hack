@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -28,7 +29,15 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Проверка контрагента", version="0.1.0", lifespan=lifespan)
+# На сервере сервис живёт за nginx по префиксу /api, локально — в корне.
+# Префикс нужен только для генерации ссылок: без него Swagger на /api/docs просит
+# схему с корня и ломается. На сопоставление маршрутов не влияет.
+app = FastAPI(
+    title="Проверка контрагента",
+    version="0.1.0",
+    lifespan=lifespan,
+    root_path=os.environ.get("API_ROOT_PATH", ""),
+)
 
 # фронт поднимается отдельным процессом на 5173
 app.add_middleware(

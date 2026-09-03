@@ -9,11 +9,18 @@ services:
     container_name: cc-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # только localhost: наружу сервис отдаёт nginx, и делает это за basic-авторизацией.
+      # Публиковать порт на все интерфейсы нельзя — в данных ФИО и личные ИНН учредителей.
+      - "127.0.0.1:8000:8000"
     env_file: .env
+    environment:
+      DATASET_PATH: /app/dataset/counterparties.json
+      # Пусто локально, "/api" на сервере — задаётся в .env рядом с compose-файлом.
+      API_ROOT_PATH: ${API_ROOT_PATH:-}
     volumes:
-      # выгрузка кейсодателя лежит вне репозитория и в образ не попадает
-      - ./data:/app/docs_alpha:ro
+      # Подготовленный набор, а не исходная выгрузка: сервис читает результат сборки.
+      # В образ не копируется и в репозиторий не попадает — только том.
+      - ./dataset:/app/dataset:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
       interval: 10s
@@ -27,10 +34,12 @@ services:
     container_name: cc-mcp
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     env_file: .env
+    environment:
+      DATASET_PATH: /app/dataset/counterparties.json
     volumes:
-      - ./data:/app/docs_alpha:ro
+      - ./dataset:/app/dataset:ro
 
   # Раскомментировать, когда появится фронт (src/web).
   # web:
