@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>tt_hack · vibe-debug preview</title>
+  <link rel="stylesheet" href="/assets/vibe-debug.css" />
+  <style>
+    body { max-width: 720px; margin: 40px auto; padding: 0 20px;
+      font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; }
+    h1 { font-size: 20px; }
+    code { background: #f2f2f3; padding: 1px 5px; border-radius: 4px; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <h1>vibe-debug · превью-заглушка</h1>
+  <p>
+    Здесь пока нет фронтенда проекта — только каркас ревью. Кнопки
+    «Комментарий» и «Список» внизу справа работают: комментарий привязывается к
+    объекту под курсором и уходит в <code>POST /__review__/comments</code>.
+  </p>
+  <p>Когда появится реальный UI, положите его в <code>preview/</code> (или укажите
+    <code>VIBE_DEBUG_ROOT</code>) и подключите на каждой странице:</p>
+  <pre><code>&lt;link rel="stylesheet" href="/assets/vibe-debug.css"&gt;
+&lt;script src="/assets/vibe-debug.js" defer&gt;&lt;/script&gt;</code></pre>
+  <p>Документы кейса лежат в репозитории:</p>
+  <ul>
+    <li><a href="https://github.com/adbgdnv/tt_hack/blob/main/case_info.md">case_info.md</a></li>
+    <li><a href="https://github.com/adbgdnv/tt_hack/tree/main/docks">docks/</a></li>
+    <li><a href="https://github.com/adbgdnv/tt_hack/blob/main/docs/VIBE-DEBUG.md">docs/VIBE-DEBUG.md</a> — как запускать</li>
+  </ul>
+  <script src="/assets/vibe-debug.js" defer></script>
+</body>
+</html>

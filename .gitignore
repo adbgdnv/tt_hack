@@ -3,6 +3,9 @@
 .env.local
 *.key
 
+# vibe-debug: локальное хранилище комментариев/вложений
+.vibe-debug/
+
 # python
 __pycache__/
 *.py[cod]

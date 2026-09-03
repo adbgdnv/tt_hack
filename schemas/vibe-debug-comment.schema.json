@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tt-hack.local/schemas/vibe-debug-comment.schema.json",
+  "title": "Комментарий ревью vibe-debug",
+  "description": "Единственный источник схемы DBG-записи. Пишется scripts/vibe_debug_server.py (normalize_comment), хранится в .vibe-debug/comments.json, читается .claude/skills/vibe-debug/SKILL.md. Менять схему — значит менять сервер и этот файл одним коммитом.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "status",
+    "createdAt",
+    "updatedAt",
+    "author",
+    "displayAuthor",
+    "text",
+    "mode",
+    "route",
+    "selector",
+    "page",
+    "target",
+    "anchor",
+    "viewport",
+    "attachments",
+    "history"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^DBG-[0-9A-F]{10}$",
+      "description": "Стабильный id, выдаётся сервером."
+    },
+    "status": {
+      "enum": ["new", "approved", "in_progress", "resolved", "wont_fix"],
+      "description": "new → approved → in_progress → resolved; wont_fix — терминальный отказ с причиной."
+    },
+    "createdAt": { "$ref": "#/$defs/timestamp" },
+    "updatedAt": { "$ref": "#/$defs/timestamp" },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "Учётная запись из Basic Auth. Формой не подменяется."
+    },
+    "displayAuthor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "Видимый псевдоним, хранится в браузере автора."
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "Текст автора. Каждый токен [скриншот#ID] обязан присутствовать здесь."
+    },
+    "mode": {
+      "enum": ["dev", "vibe", "art"],
+      "description": "Режим, в котором оставлен комментарий."
+    },
+    "route": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^/",
+      "description": "Маршрут страницы, всегда со ведущим слэшем."
+    },
+    "selector": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800,
+      "description": "CSS-селектор объекта. По умолчанию :root — комментарий ко всей странице."
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "title", "url"],
+      "properties": {
+        "route": { "type": "string", "maxLength": 240 },
+        "title": { "type": "string", "maxLength": 240 },
+        "url": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "element", "sectionId", "heading", "label", "excerpt"],
+      "description": "AI-ready контекст объекта: по нему исполнитель находит место правки без скриншота.",
+      "properties": {
+        "selector": { "type": "string", "maxLength": 800 },
+        "element": { "type": "string", "maxLength": 80 },
+        "sectionId": { "type": "string", "maxLength": 160 },
+        "heading": { "type": "string", "maxLength": 240 },
+        "label": { "type": "string", "maxLength": 240 },
+        "excerpt": { "type": "string", "maxLength": 800 }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Точка внутри объекта. Пустой объект допустим у legacy-записей.",
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "offsetX": { "type": "number", "minimum": 0, "maximum": 20000 },
+        "offsetY": { "type": "number", "minimum": 0, "maximum": 20000 },
+        "targetWidth": { "type": "number", "minimum": 0, "maximum": 20000 },
+        "targetHeight": { "type": "number", "minimum": 0, "maximum": 20000 }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "description": "Размер окна автора в CSS-пикселях. Нужен, чтобы воспроизвести замечание на той же ширине.",
+      "properties": {
+        "width": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "height": { "type": "integer", "minimum": 0, "maximum": 20000 }
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "token",
+          "filename",
+          "mimeType",
+          "size",
+          "width",
+          "height",
+          "url"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[0-9A-F]{10}$" },
+          "token": { "type": "string", "pattern": "^\\[скриншот#[0-9A-F]{10}\\]$" },
+          "filename": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "mimeType": { "enum": ["image/png", "image/jpeg", "image/webp"] },
+          "size": { "type": "integer", "minimum": 0 },
+          "width": { "type": "number", "minimum": 0, "maximum": 20000 },
+          "height": { "type": "number", "minimum": 0, "maximum": 20000 },
+          "url": { "type": "string", "pattern": "^/__review__/attachments/" }
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Полная история: кто и когда создал запись и менял статус.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["at", "by", "action", "status"],
+        "properties": {
+          "at": { "$ref": "#/$defs/timestamp" },
+          "by": { "type": "string", "maxLength": 80 },
+          "action": { "enum": ["created", "status_changed"] },
+          "status": {
+            "enum": ["new", "approved", "in_progress", "resolved", "wont_fix"]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "UTC, ISO-8601, без долей секунды."
+    }
+  }
+}

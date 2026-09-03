@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vibe Debug"
+  short_description: "Run previews, audit site comments, and apply approved notes"
+  default_prompt: "Use $vibe-debug to open or continue the review preview, inspect the read-only site-wide comment queue, audit its JSON and screenshots, and only apply or close comments when explicitly requested."

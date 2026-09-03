@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vibe-debug",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["scripts/vibe_debug_server.py"],
+      "port": 8788
+    }
+  ]
+}

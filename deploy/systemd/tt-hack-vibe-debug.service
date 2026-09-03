@@ -1,0 +1,24 @@
+# /etc/systemd/system/tt-hack-vibe-debug.service
+# Держит review API vibe-debug. Правьте пути под свою площадку.
+[Unit]
+Description=tt_hack vibe-debug review API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/tt-hack
+Environment=VIBE_DEBUG_HOST=127.0.0.1
+Environment=VIBE_DEBUG_PORT=8788
+Environment=VIBE_DEBUG_ROOT=/opt/tt-hack/preview
+Environment=VIBE_DEBUG_DATA=/opt/tt-hack-review/comments.json
+Environment=VIBE_DEBUG_ATTACHMENTS=/opt/tt-hack-review/attachments
+ExecStart=/usr/bin/python3 /opt/tt-hack/scripts/vibe_debug_server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
