@@ -29,8 +29,8 @@ if [ -z "${PREVIEW_BASIC_AUTH:-}" ] && [ -r "${HOME}/.preview-smoke-auth" ]; the
   PREVIEW_BASIC_AUTH="$(cat "${HOME}/.preview-smoke-auth")"
 fi
 
-# --- Логи (без секретов) ------------------------------------------------------
-log()  { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+# --- Логи (в stderr, без секретов; stdout свободен под данные вроде web-статуса) ---
+log()  { printf '%s %s\n'      "$(date -u +%H:%M:%S)" "$*" >&2; }
 warn() { printf '%s WARN %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
 die()  { printf '%s ERROR %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; exit "${2:-1}"; }
 
