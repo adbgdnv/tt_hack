@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,8 @@
 
 ## Notes
 
-- Один маркер [NEEDS CLARIFICATION] остаётся в разделе Assumptions: нужен ли автоматический
-  откат при проваленном smoke-check, или ручного отката достаточно на хакатон. Разрешается
-  через `/speckit-clarify` или ответом до `/speckit-plan`.
+- Q1 закрыт: откат только ручной (вариант A). Добавлен FR-007a — атомарное переключение на
+  новую версию после успешного smoke-check. Маркеров [NEEDS CLARIFICATION] не осталось.
 - Названия инфраструктуры (Nginx, сервер, каталоги) в спеке — это фиксированные факты
   окружения из `deploy/` и `docs/`, а не выбор реализации. Выбор транспорта, CI-механики и
   структуры скриптов оставлен для `/speckit-plan`.
