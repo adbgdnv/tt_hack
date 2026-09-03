@@ -37,6 +37,11 @@
   (`DEPLOY_KNOWN_HOSTS` внесён в FR-008 и Key Entities), F3 (guard про запретные пути в
   T003/T007/T022), F5 (формулировка про Nginx в plan.md). F6 — информационная, правок не
   требует. Critical/High после правок — 0.
+- `/speckit-converge` → `/speckit-implement` (2026-09-03): T028 закрыт — Basic Auth хранится
+  на сервере (`~ttdeploy/.preview-smoke-auth`), не в GitHub Secrets; FR-008, Key Entities,
+  `data-model.md`, оба контракта и `research.md` R5/R6/R8 приведены к этому. GitHub Secrets — 4.
+  Также T030 (контур в логе), T031 (`SMOKE_PATHS` проброшен), T032 (снят npm-кэш до lockfile).
+  Осталось T027/T029 — только живой прогон.
 - Названия инфраструктуры (Nginx, сервер, каталоги) в спеке — это фиксированные факты
   окружения из `deploy/` и `docs/`, а не выбор реализации. Выбор транспорта, CI-механики и
   структуры скриптов оставлен для `/speckit-plan`.

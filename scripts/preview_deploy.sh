@@ -78,6 +78,7 @@ finalize() {
   local previous
   previous="$(find_previous_release || true)"
 
+  log "контур: preview (main); релиз: $(basename "${release_dir}")"
   atomic_switch "${release_dir}"
   log "переключено на $(basename "${release_dir}")"
 

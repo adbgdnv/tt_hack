@@ -83,7 +83,8 @@ Phase 0. Разрешение открытых вопросов из Technical C
 допускает явно (FR-007b, последнее предложение). Отдельный staging-адрес остаётся возможной
 альтернативой, если позже понадобится нулевое окно.
 
-**Rationale**: FR-006. `PREVIEW_BASIC_AUTH` в формате `user:password` прямо в `-u`.
+**Rationale**: FR-006. `PREVIEW_BASIC_AUTH` (`user:password`) — из env или из
+`~/.preview-smoke-auth`, передаётся в `curl -u`, полный URL с кредами не печатается.
 
 **Alternatives considered**: `wget --spider`, headless-браузер (Playwright) — избыточно,
 smoke-check про доступность, не про рендер (Assumptions).
@@ -99,9 +100,10 @@ smoke-check про доступность, не про рендер (Assumptions
 в `DEPLOY_KNOWN_HOSTS` секрет ИЛИ `ssh-keyscan -H $DEPLOY_HOST` на лету — на лету проще, но
 без пиннинга; берём секрет).
 
-**Секреты**: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`,
-`PREVIEW_BASIC_AUTH`. (Спека называла 4 — добавляется `DEPLOY_KNOWN_HOSTS` для проверки хоста;
-если решим keyscan на лету — вернёмся к 4.)
+**GitHub Secrets (4)**: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`.
+Basic Auth для smoke-check в CI **не хранится** — он на сервере в `~ttdeploy/.preview-smoke-auth`
+(chmod 600), рядом с htpasswd Nginx. `preview_common.sh` читает файл, если env `PREVIEW_BASIC_AUTH`
+пуст. Так секрет не гоняется по ssh при `--finalize` и живёт там же, где уже используется.
 
 **Rationale**: FR-005, FR-008, FR-009. Ограничение правами ФС надёжнее, чем надежда на
 `command=` при rsync.
@@ -123,7 +125,8 @@ job в `deploy.yml`. `cancel-in-progress: false` — не рвать текущ�
 
 ## R8. Секреты не в логах
 
-**Decision**: `PREVIEW_BASIC_AUTH` и ключ — только через `env:` из `secrets`, никаких `echo`.
+**Decision**: ключ и `DEPLOY_*` — только через `env:`/`~/.ssh` из `secrets`, никаких `echo`.
+`PREVIEW_BASIC_AUTH` в CI не фигурирует вовсе (читается на сервере).
 `set -x` в bash-скриптах не включать глобально; в местах с секретами — `set +x`. GitHub сам
 маскирует зарегистрированные секреты, но `curl -u` может утечь в `%{url_effective}` — в
 `preview_smoke.sh` не печатать полный URL с кредами.

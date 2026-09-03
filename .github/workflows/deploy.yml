@@ -36,8 +36,8 @@ jobs:
         if: steps.web.outputs.present == 'true'
         with:
           node-version: lts/*
-          cache: npm
-          cache-dependency-path: src/web/package-lock.json
+          # кэш npm включим, когда в src/web появится package-lock.json
+          # (сейчас его нет — cache-dependency-path уронил бы шаг)
 
       - name: Настроить SSH
         run: |

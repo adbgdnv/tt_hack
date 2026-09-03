@@ -14,11 +14,11 @@
 
 | Переменная | Обяз. | Смысл |
 |---|---|---|
-| `DEPLOY_HOST` | да (в CI) | сервер; при запуске *на* сервере — `localhost`, тогда rsync локальный |
-| `DEPLOY_USER` | да (в CI) | `ttdeploy` |
-| `PREVIEW_BASIC_AUTH` | да | `user:password` для smoke-check |
+| `DEPLOY_HOST` | да в режиме CI | адрес сервера (в `--local`/`--finalize` не нужен) |
+| `DEPLOY_USER` | да в режиме CI | `ttdeploy` |
+| `PREVIEW_BASIC_AUTH` | — | `user:password` для smoke. В CI не передаётся; на сервере берётся из `~/.preview-smoke-auth`, если env пуст |
 | `PREVIEW_BASE_URL` | нет | по умолчанию `https://tt-hack-review.72.56.16.44.sslip.io` |
-| `SMOKE_PATHS` | нет | по умолчанию `/ /report.html /mcp.html` |
+| `SMOKE_PATHS` | нет | пути через пробел; пусто → `/ /report.html /mcp.html` |
 | `KEEP_RELEASES` | нет | по умолчанию `5` |
 
 **Флаги:** `--dry-run` (показать план, ничего не менять), `--no-web` (пропустить сборку явно),
@@ -52,8 +52,8 @@
 
 **Назначение:** вернуть предыдущий релиз.
 
-**Вход (env):** те же хост/юзер, `PREVIEW_BASE_URL`, `PREVIEW_BASIC_AUTH` (для smoke после
-отката).
+**Вход (env):** `PREVIEW_BASE_URL`; Basic Auth для smoke после отката — из
+`~/.preview-smoke-auth` на сервере.
 
 **Флаги:** `--to <RELEASE_ID>` (откатить на конкретный, вместо «предыдущего»), `--list`
 (показать релизы и текущий), `--local`.

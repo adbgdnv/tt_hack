@@ -34,11 +34,12 @@ concurrency:
 | 1 | `actions/checkout@v4` (ref = SHA из `workflow_run`, для dispatch — `main`) | fail |
 | 2 | `actions/setup-node@v4` (LTS) — только если есть `src/web/package.json` | fail |
 | 3 | Установить SSH: записать `DEPLOY_SSH_KEY` в `~/.ssh/id_ed25519` (chmod 600), `DEPLOY_KNOWN_HOSTS` в `~/.ssh/known_hosts` | fail |
-| 4 | Запустить `scripts/preview_deploy.sh` с env из секретов (см. ниже) | fail, симлинк на сервере не тронут |
-| 5 | Вывести summary в `$GITHUB_STEP_SUMMARY`: коммит, статус сборки web, коды smoke-check, release-id | — |
+| 4 | Запустить `scripts/preview_deploy.sh` (режим CI) с `DEPLOY_HOST`/`DEPLOY_USER` в env | fail, симлинк на сервере не тронут |
+| 5 | Вывести summary в `$GITHUB_STEP_SUMMARY`: коммит, статус сборки web, итог job, ссылку на лог шага 4 (в нём — коды smoke) | — |
 
-Шаг 4 делает всю работу (rsync, smoke, switch) на сервере через ssh/rsync — логика в скрипте,
-не в YAML, чтобы ручной запуск был идентичен (FR-010).
+Шаг 4 собирает staging и rsync-ит релиз на сервер, затем по ssh запускает
+`preview_deploy.sh --finalize <id>` на сервере — switch, smoke, prune. Логика в скрипте, не в
+YAML, чтобы ручной запуск (`--local`) был идентичен (FR-010).
 
 ## Передача секретов в шаг
 
@@ -46,10 +47,11 @@ concurrency:
 env:
   DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
   DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-  PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
 ```
 
-Ключ и known_hosts — уже в `~/.ssh/` после шага 3. Ничего не `echo`-ится.
+Ключ и known_hosts — уже в `~/.ssh/` после шага 3. Basic Auth для smoke-check в CI **не
+передаётся** — `preview_deploy.sh --finalize` на сервере читает его из
+`~ttdeploy/.preview-smoke-auth`. Ничего не `echo`-ится.
 
 ## Наблюдаемое поведение (для приёмки)
 

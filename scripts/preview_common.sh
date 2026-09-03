@@ -103,6 +103,13 @@ prune_releases() {
 }
 
 # --- Прогон smoke-check по опубликованному адресу ---------------------------
+# Пути берутся из SMOKE_PATHS (через пробел); пусто → дефолты preview_smoke.sh.
 run_smoke() {
-  "${SCRIPT_DIR}/preview_smoke.sh" "${PREVIEW_BASE_URL}"
+  local paths=()
+  if [ -n "${SMOKE_PATHS:-}" ]; then
+    # намеренное словоделение: SMOKE_PATHS — список путей через пробел
+    # shellcheck disable=SC2206
+    paths=(${SMOKE_PATHS})
+  fi
+  "${SCRIPT_DIR}/preview_smoke.sh" "${PREVIEW_BASE_URL}" ${paths[@]+"${paths[@]}"}
 }

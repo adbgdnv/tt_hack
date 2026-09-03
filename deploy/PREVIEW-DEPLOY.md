@@ -147,4 +147,5 @@ scripts/preview_rollback.sh --to 20260903T140502Z-1a2b3c4   # на конкре�
 | `rsync: mkdir ... failed: Permission denied` | `ttdeploy` не владелец `/opt/tt-hack/releases` — см. шаг 2 |
 | `smoke провален — откат` | новый релиз отдал не `200`. Проверить сборку, `~ttdeploy/.preview-smoke-auth`, htpasswd Nginx |
 | `src/web: сборка не дала dist/` | Vite пишет не в `dist/` — поправить `build.outDir` или скрипт |
+| `npm ci` падает `lock file ... not found` | в `src/web` нет `package-lock.json` — закоммитить его вместе с `package.json` (после этого в `deploy.yml` можно вернуть `cache: npm`) |
 | `mv: invalid option -- 'T'` при `--local` на своей машине | скрипты рассчитаны на Linux (GNU coreutils); запускать на сервере/раннере |

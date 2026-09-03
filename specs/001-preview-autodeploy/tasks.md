@@ -12,10 +12,10 @@ description: "Task list — Автодеплой превью"
 **Tests**: автотестов на bash не заводим (Принцип III). Контроль качества — `shellcheck` в CI
 (T022) + прогон `quickstart.md` (T024). Сам smoke-check — исполняемая проверка выкладки.
 
-**Статус (2026-09-03)**: 24/26 сделано и проверено локально (`bash -n`, `shellcheck`,
-функции релизов, `preview_smoke.sh` против локального сервера). Осталось **T024** и **T025** —
-им нужен живой сервер: настроенный `ttdeploy`, секреты в репозитории, реальный прогон
-`deploy.yml`. Это вход в `/speckit-converge`.
+**Статус (2026-09-03)**: 24/26 + Phase 7 (T028, T030, T031, T032) сделано и проверено локально
+(`bash -n`, `shellcheck` чисто, `run_smoke` с `SMOKE_PATHS` и без, YAML валиден). Осталось
+**T027** и **T029** (≡ T024/T025) — им нужен живой сервер: настроенный `ttdeploy`, 4 секрета,
+реальный прогон `deploy.yml`.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -229,7 +229,7 @@ Setup (T001-T002)
 - [ ] T027 Прогнать `specs/001-preview-autodeploy/quickstart.md` (сценарии 1–6) против живого
       сервера и отметить чек-лист приёмки; расхождения — новыми задачами per US1/US2/US3
       acceptance, SC-001/003/004 (missing). Блокируется настройкой сервера и секретов.
-- [ ] T028 Разрешить расхождение по хранению Basic Auth: `FR-008` (обновлён в analyze) требует
+- [X] T028 Разрешить расхождение по хранению Basic Auth: `FR-008` (обновлён в analyze) требует
       «логин/пароль Basic Auth … в секретах репозитория», а реализация читает его из
       `~ttdeploy/.preview-smoke-auth` на сервере. `data-model.md` (DeployAccess) и
       `contracts/deploy-workflow.md` / `contracts/deploy-scripts.md` всё ещё описывают
@@ -238,14 +238,14 @@ Setup (T001-T002)
 - [ ] T029 Проверить лог реального прогона `deploy.yml`: ни `DEPLOY_SSH_KEY`, ни
       `DEPLOY_KNOWN_HOSTS`, ни Basic Auth не видны в открытом виде (в шагах и в
       `$GITHUB_STEP_SUMMARY`) per FR-014, SC-006 (missing). Блокируется первым живым прогоном.
-- [ ] T030 Добавить в лог выкладки явную строку контура (`контур: preview (main)`) — в
+- [X] T030 Добавить в лог выкладки явную строку контура (`контур: preview (main)`) — в
       `finalize()` `scripts/preview_deploy.sh` и/или в summary `deploy.yml`; сейчас пишутся
       коммит, коды smoke и итог, но не контур per FR-012 (partial).
-- [ ] T031 Свести `SMOKE_PATHS`: env упомянут в шапке `scripts/preview_deploy.sh` и в
+- [X] T031 Свести `SMOKE_PATHS`: env упомянут в шапке `scripts/preview_deploy.sh` и в
       `contracts/deploy-scripts.md`, но `run_smoke()` в `preview_common.sh` не передаёт его в
       `preview_smoke.sh` (всегда дефолтные пути). Либо пробросить `${SMOKE_PATHS:-}` в
       `run_smoke`, либо убрать упоминание per contracts/deploy-scripts.md (partial).
-- [ ] T032 `actions/setup-node` в `deploy.yml` использует `cache: npm` +
+- [X] T032 `actions/setup-node` в `deploy.yml` использует `cache: npm` +
       `cache-dependency-path: src/web/package-lock.json`; когда `src/web` появится с
       `package.json`, но без закоммиченного `package-lock.json`, шаг упадёт («lock file is not
       found»). Либо снять кэш до появления lockfile, либо задокументировать требование

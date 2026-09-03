@@ -59,8 +59,10 @@ previous снова становится current
 | `DEPLOY_HOST` | GitHub Secret | адрес сервера |
 | `DEPLOY_USER` | GitHub Secret | `ttdeploy` |
 | `DEPLOY_KNOWN_HOSTS` | GitHub Secret | строка `ssh-keyscan` для пиннинга хоста |
-| `PREVIEW_BASIC_AUTH` | GitHub Secret | `user:password` для smoke-check через Nginx Basic Auth |
 | публичный ключ | `~ttdeploy/.ssh/authorized_keys` на сервере | приём деплой-соединения |
+| Basic Auth для smoke | `~ttdeploy/.preview-smoke-auth` на сервере (chmod 600) | `user:password`; `preview_common.sh` читает файл, если `PREVIEW_BASIC_AUTH` не задан в env. В GitHub **не хранится** |
+
+GitHub Secrets: 4 (`DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`).
 
 **Правила:** `ttdeploy` владеет `/opt/tt-hack/releases/` и симлинком, не имеет `sudo`, не имеет
 доступа на запись в `/opt/tt-hack-review/`. Ни один элемент не хранится в репозитории и не
