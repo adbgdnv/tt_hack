@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from core import mocks, slim
+from core import mocks, repo, slim
 
 mcp = FastMCP("counterparty-checker")
 
@@ -37,9 +37,9 @@ def get_counterparty_report(inn: str) -> dict:
     Только поля из выгрузки. Пустое поле означает, что данных нет —
     не интерпретируй пустоту как отсутствие проблемы.
     """
-    report = mocks.by_inn(inn)
+    report = repo.by_inn(inn)
     if report is None:
-        return {"error": "not_found", "detail": "Контрагента нет в выгрузке"}
+        return {"error": "not_found", "detail": "Компания не найдена"}
     return slim.slim(report)
 
 

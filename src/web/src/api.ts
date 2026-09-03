@@ -47,25 +47,40 @@ function unknownBlock(key: BlockKey, details: ReportBlock['details'], source: st
   };
 }
 
+/**
+ * Скоринг банка приходит значениями LOW / MEDIUM / HIGH / UNKNOWN.
+ *
+ * Прежнее сопоставление сравнивало их с русскими подстроками и с 'red'/'yellow',
+ * из-за чего не срабатывала ни одна ветвь и все четыре значения давали «Низкий» —
+ * включая высокий риск и «нет данных». Затрагивало 11 компаний из 200.
+ *
+ * UNKNOWN означает «оценить невозможно» и не сводится ни к низкому, ни к высокому.
+ */
 const asRisk = (value?: string | null): Counterparty['bankRisk'] => {
-  const lowered = value?.toLocaleLowerCase('ru-RU');
-  if (lowered?.includes('высок') || lowered === 'red') return 'Высокий';
-  if (lowered?.includes('сред') || lowered === 'yellow') return 'Средний';
-  return 'Низкий';
+  switch (value?.trim().toUpperCase()) {
+    case 'LOW': return 'Низкий';
+    case 'MEDIUM': return 'Средний';
+    case 'HIGH': return 'Высокий';
+    default: return 'Нет данных';
+  }
 };
 
+/** Платформа ЗСК Банка России: GREEN / YELLOW / RED. Отсутствие значения — не «зелёный». */
 const asLight = (value?: string | null): Counterparty['bankLight'] => {
-  const lowered = value?.toLocaleLowerCase('ru-RU');
-  if (lowered?.includes('крас') || lowered === 'red') return 'Красный';
-  if (lowered?.includes('жёл') || lowered?.includes('желт') || lowered === 'yellow') return 'Жёлтый';
-  return 'Зелёный';
+  switch (value?.trim().toUpperCase()) {
+    case 'GREEN': return 'Зелёный';
+    case 'YELLOW': return 'Жёлтый';
+    case 'RED': return 'Красный';
+    default: return 'Нет данных';
+  }
 };
 
 function adaptApiReport(raw: Counterparty | SlimApiReport): Counterparty {
   if ('blocks' in raw) return raw;
+  // Ответ сервера показывается всегда. Заготовленные примеры — запасной путь
+  // на случай недоступного сервера, и подставляются в searchCounterparties /
+  // getCounterparty до обращения, а не поверх уже полученных данных.
   const inn = String(raw.инн ?? '');
-  const fixture = findFixtureByInn(inn);
-  if (fixture) return fixture;
 
   const legalForm = raw.форма === 'ИП' ? 'entrepreneur' : 'legal';
   const courtsSignal: Signal = raw.арбитраж_всего_дел ? 'yellow' : 'unknown';

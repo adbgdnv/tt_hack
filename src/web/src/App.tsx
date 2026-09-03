@@ -195,6 +195,15 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, history
   );
 }
 
+/** Цвет индикатора ЗСК. Отсутствие оценки — серый, а не зелёный:
+ *  «оценить невозможно» и «всё хорошо» — разные утверждения. */
+function bankTone(light: Counterparty['bankLight']): string {
+  if (light === 'Красный') return 'red';
+  if (light === 'Жёлтый') return 'yellow';
+  if (light === 'Нет данных') return 'grey';
+  return 'green';
+}
+
 function Dashboard({ company, onHome, onOpenBlock, chatContext, onToast, onAddCompare, compareCount, compared }: {
   company: Counterparty;
   onHome: () => void;
@@ -221,7 +230,7 @@ function Dashboard({ company, onHome, onOpenBlock, chatContext, onToast, onAddCo
           </div>
           <div className="bank-signal">
             <div className="bank-signal__head"><span>Банковская оценка</span><span className="source-of-truth">Источник истины</span></div>
-            <div className="bank-signal__value"><span className={'bank-dot bank-dot--' + (company.bankLight === 'Красный' ? 'red' : company.bankLight === 'Жёлтый' ? 'yellow' : 'green')} />{company.bankRisk} риск</div>
+            <div className="bank-signal__value"><span className={'bank-dot bank-dot--' + bankTone(company.bankLight)} />{company.bankRisk === 'Нет данных' ? 'Риск не оценён' : company.bankRisk + ' риск'}</div>
             <div className="bank-signal__meta"><span>ЗСК: {company.bankLight}</span><time>Расчёт {company.dataDate}</time></div>
           </div>
           <div className="report-actions">

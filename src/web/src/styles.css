@@ -493,6 +493,8 @@ input:focus-visible,
 
 .bank-dot--yellow { background: #d58c00; }
 .bank-dot--red { background: #ef3124; }
+/* серый = оценить невозможно, не «всё хорошо» */
+.bank-dot--grey { background: #8d8d93; }
 
 .report-actions {
   display: grid;
