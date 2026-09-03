@@ -24,7 +24,6 @@ tt_hack - общая директория команды
 | `data/contractors_audit.snapshot.json` | 100 компаний |
 | `data/contractors_audit.snapshot_C12613591.csv` | **другие** 100 компаний, плоский вид, 2654 колонки |
 | `data/quick_message.md` | переписка с кейсодателем в TG |
-| `questions_to_case_owner.md` | вопросы кейсодателю + сводка находок по данным |
 | `imported_from_claude.md` | **нет в репозитории** — лежит на уровень выше. Частично опровергнут, см. ниже |
 | `.claude/Next-Move-Theory-Canon/` | канон методологии; читается скиллами `/nmt-*` на каждом прогоне |
 | `.claude/skills/` | 8 × `nmt-*`, `alfa-core-components`, 10 × `speckit-*`, `vibe-debug` |
