@@ -4,7 +4,7 @@
 #
 #   preview_smoke.sh <base-url> [path ...]
 #
-# Пути по умолчанию: / /report.html /mcp.html
+# Путь по умолчанию: / (превью — SPA из src/web, отдельных статических страниц нет)
 # Basic Auth — из env PREVIEW_BASIC_AUTH (user:password) или ~/.preview-smoke-auth.
 # Полный URL с логином/паролем не печатается (FR-014).
 set -euo pipefail
@@ -20,7 +20,7 @@ base="${1%/}"; shift
 
 paths=("$@")
 if [ "${#paths[@]}" -eq 0 ]; then
-  paths=(/ /report.html /mcp.html)
+  paths=(/)
 fi
 
 auth=()

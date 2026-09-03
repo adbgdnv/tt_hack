@@ -23,12 +23,12 @@
 push → main
   └─ CI (ruff + pytest + shellcheck)  ──✅──▶  workflow "Deploy preview"
         ├─ [если есть src/web/package.json] npm ci && npm run build
-        ├─ staging = src/web/dist/ + preview/   (при коллизии имя из preview/ выигрывает)
+        ├─ staging = src/web/dist/ + preview/   (rsync --ignore-existing: фронт выигрывает коллизию)
         ├─ rsync staging ──ssh ttdeploy──▶ /opt/tt-hack-preview/releases/<UTC>-<sha>/
         ├─ rsync scripts/preview_*.sh ──▶ /opt/tt-hack-preview/bin/
         └─ ssh: bin/preview_deploy.sh --finalize <id>
               ├─ mv -T симлинка /opt/tt-hack-preview/current → релиз   (атомарно)
-              ├─ smoke: curl 200  /  /report.html  /mcp.html
+              ├─ smoke: curl 200  /   (SPA; переопределяется env SMOKE_PATHS)
               │     └─ ✗ → откат симлинка на предыдущий релиз, job красный
               └─ оставить 5 релизов, старые удалить
 ```
