@@ -37,7 +37,7 @@ while [ $# -gt 0 ]; do
 done
 
 # ---------------------------------------------------------------------------
-# Сборка staging-каталога: src/web/dist (если есть) + preview/ (preview выигрывает коллизию)
+# Сборка staging-каталога: src/web/dist (если есть) + preview/ (фронт выигрывает коллизию)
 # ---------------------------------------------------------------------------
 build_staging() {
   local staging="$1" web="skipped"
@@ -52,8 +52,9 @@ build_staging() {
     log "src/web: пропуск (нет package.json или --no-web)"
   fi
 
-  # preview/ поверх, без перезаписи уже положенного фронтом
-  cp -Rn "${REPO_DIR}/preview/." "${staging}/" 2>/dev/null || cp -R "${REPO_DIR}/preview/." "${staging}/"
+  # preview/ (vibe-debug и прочая статика) поверх, но НЕ затирая собранный фронт:
+  # --ignore-existing оставляет dist/index.html и dist/assets на месте.
+  rsync -a --ignore-existing "${REPO_DIR}/preview/" "${staging}/"
 
   local sha branch
   sha="$(git -C "${REPO_DIR}" rev-parse HEAD 2>/dev/null || echo nogit)"
