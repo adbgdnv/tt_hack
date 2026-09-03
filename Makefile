@@ -1,0 +1,35 @@
+.DEFAULT_GOAL := help
+.PHONY: help install test lint up down logs probe check-llm data
+
+help:  ## Список команд
+	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+install:  ## Поставить зависимости в текущее окружение
+	pip install -e ".[dev]"
+
+test:  ## Прогнать тесты
+	pytest -q
+
+lint:  ## Проверить стиль
+	ruff check .
+
+up:  ## Поднять api и mcp
+	docker compose up --build -d
+	@echo "api  → http://localhost:8000/health"
+	@echo "mcp  → http://localhost:8001"
+
+down:  ## Остановить всё
+	docker compose down
+
+logs:  ## Логи сервисов
+	docker compose logs -f
+
+data:  ## Связать выгрузку кейсодателя (docs_alpha лежит вне репозитория)
+	@test -e data || ln -s ../docs_alpha data
+	@echo "data → $$(readlink data 2>/dev/null || echo 'уже каталог')"
+
+probe:  ## Прогнать пробник на живой модели
+	python3 temp/probe_llm.py
+
+check-llm:  ## Проверить доступность провайдеров с текущей сети
+	bash temp/check_llm.sh
