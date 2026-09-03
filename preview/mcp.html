@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP-сервер проверки контрагента (каркас)</title>
+<link rel="stylesheet" href="/assets/wire.css?v=1">
+</head>
+<body>
+
+<div class="spec-bar">
+  <span><b>S-03</b> MCP-сервер</span>
+  <span>маршрут <b>/mcp.html</b></span>
+  <span>case_info.md — «MCP-сервер — опционально»</span>
+  <span>каркас, контракт — черновик</span>
+</div>
+
+<header class="hdr">
+  <span class="brand">Проверка контрагента</span>
+  <nav>
+    <a href="/">Проверки</a>
+    <a href="/report.html">Отчёт</a>
+    <a href="/mcp.html" aria-current="page">MCP-сервер</a>
+  </nav>
+  <div class="search"><input type="search" placeholder="ИНН или наименование контрагента" aria-label="Поиск контрагента"></div>
+</header>
+
+<main id="main">
+<div class="wrap">
+
+  <section class="section" id="s-intro">
+    <span class="section__id">S-03.1 · назначение</span>
+    <h1>MCP-сервер</h1>
+    <p class="muted small">Прототип, эмулирующий обращение к реальной системе проверки контрагентов. Агент ходит в него за данными отчёта.</p>
+    <p class="note">// в скоуп хакатона входит опционально; контракт ниже — черновик для ревью</p>
+  </section>
+
+  <section class="section" id="s-tools">
+    <span class="section__id">S-03.2 · инструменты</span>
+    <h2>Инструменты сервера</h2>
+    <div class="grid g2">
+      <div class="card"><p class="card__title">get_company</p><p class="card__meta">карточка юрлица по ИНН: наименование, ОГРН, адрес, статус ЕГРЮЛ</p></div>
+      <div class="card"><p class="card__title">get_finance</p><p class="card__meta">выручка, прибыль, активы по годам</p></div>
+      <div class="card"><p class="card__title">list_court_cases</p><p class="card__meta">арбитражные дела: номер, роль, сумма, статус</p></div>
+      <div class="card"><p class="card__title">check_registries</p><p class="card__meta">присутствие в реестрах ФНС, РНП, блокировки</p></div>
+    </div>
+    <p class="note">// имена и состав ответов инструментов не согласованы — предмет ревью</p>
+  </section>
+
+  <section class="section" id="s-schema">
+    <span class="section__id">S-03.3 · пример ответа</span>
+    <h2>get_company → ответ</h2>
+    <div class="ph" style="min-height:160px">блок с примером JSON-ответа инструмента</div>
+    <p class="note">// заполнить реальным примером после фиксации схемы</p>
+  </section>
+
+  <section class="section" id="s-limits">
+    <span class="section__id">S-03.4 · ограничения прототипа</span>
+    <h2>Что прототип не делает</h2>
+    <ul class="small muted">
+      <li>не ходит в реальные источники — отдаёт заранее подготовленные данные;</li>
+      <li>не хранит историю запросов;</li>
+      <li>не аутентифицирует клиента.</li>
+    </ul>
+    <p class="note">// список ограничений сверить с тем, что покажем на защите</p>
+  </section>
+
+</div>
+</main>
+
+<footer class="ftr">
+  <span>Каркас для ревью · vibe-debug</span>
+  <span style="margin-left:auto">данные вымышленные</span>
+</footer>
+
+<script src="/assets/vibe-debug.js?v=20260828-vibe21" defer></script>
+</body>
+</html>

@@ -1,18 +1,27 @@
 # vibe-debug — запуск и деплой
 
-Каркас визуального ревью через коммент-превью. Портирован из проекта `lapki`,
-здесь пока в состоянии заглушки: сервер и API рабочие, оверлей минимальный —
-только пины и статусы; режимов dev/art, рисования и вложений нет.
+Каркас визуального ревью через коммент-превью, портирован из проекта `lapki`
+целиком: режимы `view` / `dev` / `vibe`, пины, карандаш и рамка, скриншоты,
+общая очередь. Операционка — `docs/VIBE-DEBUG-RUNBOOK.md`, конвейер
+комментарий→задача — `docs/REVIEW-TO-TASK.md`, скилл — `.claude/skills/vibe-debug/`.
+
+Продуктового фронтенда ещё нет — под ревью стоит каркас-заглушка «Проверка
+контрагента» в `preview/*.html` (index, report, mcp).
 
 ## Состав
 
 | Путь | Что это |
 |------|---------|
-| `scripts/vibe_debug_server.py` | Статический сервер + review API. Python 3.10+, только stdlib. |
+| `scripts/vibe_debug_server.py` | Статика + review API. Python 3.10+, только stdlib. |
+| `scripts/review_schema.py` | Валидатор схемы (подмножество JSON Schema, без зависимостей). |
+| `scripts/audit_vibe_debug_data.py` | Read-only аудит очереди и вложений. |
+| `scripts/review_triage.py` | Карточки разбора из очереди. |
 | `schemas/vibe-debug-comment.schema.json` | Единственная схема DBG-записи. |
-| `preview/` | Корень статики, который отдаёт сервер (заглушка + оверлей). |
-| `preview/assets/vibe-debug.{js,css}` | Минимальный клиент ревью. |
-| `.claude/skills/vibe-debug/` | Скилл `/vibe-debug` для Claude Code. |
+| `tests/test_vibe_debug_server.py` | Регрессия схемы и хранилищ. |
+| `preview/` | Корень статики: каркас-заглушка + оверлей. |
+| `preview/assets/vibe-debug.{js,css}` | Клиент ревью (verbatim из lapki). |
+| `preview/assets/wire.css` | Стили каркаса превью. |
+| `deploy/` | systemd-юнит и конфиг nginx. |
 
 ## Локальный запуск
 
@@ -20,8 +29,8 @@
 python3 scripts/vibe_debug_server.py
 ```
 
-Откроется на `http://127.0.0.1:8788/index.html`. Комментарии пишутся в
-`.vibe-debug/comments.json` (в git не коммитится).
+`http://127.0.0.1:8788/`. Данные — `.vibe-debug/` (в git не коммитится).
+Тесты: `python3 -m unittest discover -s tests`.
 
 Переменные окружения:
 
@@ -31,16 +40,10 @@ python3 scripts/vibe_debug_server.py
 | `VIBE_DEBUG_PORT` | `8788` | порт |
 | `VIBE_DEBUG_ROOT` | `preview/` | корень статики |
 | `VIBE_DEBUG_DATA` | `.vibe-debug/comments.json` | файл комментариев |
+| `VIBE_DEBUG_MARKS` | рядом с DATA | файл графических пометок |
+| `VIBE_DEBUG_ATTACHMENTS` | рядом с DATA | каталог скриншотов |
 
-## API
-
-| Метод и путь | Назначение |
-|--------------|-----------|
-| `GET /__review__/session` | автор из заголовка `X-Review-User` (его проставляет Nginx) |
-| `GET /__review__/comments?route=/path` | список комментариев маршрута |
-| `POST /__review__/comments` | создать комментарий (тело валидирует `normalize_comment`) |
-| `POST /__review__/comments/status` | сменить статус: `{ "id", "status" }` |
-| `POST /__review__/comments/delete` | удалить: `{ "id" }` |
+API (GET — чтение, POST — запись) перечислён в `docs/VIBE-DEBUG-RUNBOOK.md`.
 
 ## Общий превью-сервер (основной режим, как в lapki)
 
@@ -99,15 +102,16 @@ sudo certbot --nginx -d tt-hack-review.72.56.16.44.sslip.io --non-interactive --
 Логин из Basic Auth уходит в `X-Review-User` и становится `author` комментария —
 поле формой не подменяется.
 
-## Когда появится фронтенд
+## Когда появится продуктовый фронтенд
 
-Положить его в `preview/` (или указать `VIBE_DEBUG_ROOT` на его сборку) и
-подключить на каждой странице:
+Положить сборку в `preview/` (или указать `VIBE_DEBUG_ROOT` на неё) и подключить
+на каждой странице:
 
 ```html
-<link rel="stylesheet" href="/assets/vibe-debug.css" />
-<script src="/assets/vibe-debug.js" defer></script>
+<script src="/assets/vibe-debug.js?v=20260828-vibe21" defer></script>
 ```
 
-Для осмысленного `target` в комментариях желательно проставлять на блоках
-стабильные `id` или `data-*`-атрибуты.
+`vibe-debug.js` сам подтянет `/assets/vibe-debug.css`. Для осмысленного `target`
+блоки желательно оборачивать в `<section>` с `<span class="section__id">` либо
+давать стабильные `id` / `data-*` — по ним `dev`-инспектор строит `data-debug-id`
+и человекочитаемые подписи.

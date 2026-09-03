@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Отчёт по контрагенту — ООО «Ромашка» (каркас)</title>
+<link rel="stylesheet" href="/assets/wire.css?v=1">
+</head>
+<body>
+
+<div class="spec-bar">
+  <span><b>S-02</b> Отчёт по контрагенту</span>
+  <span>маршрут <b>/report.html</b></span>
+  <span>case_info.md — «Анализ отчёта», «Диалог с пользователем»</span>
+  <span>каркас, данные — заглушки</span>
+</div>
+
+<header class="hdr">
+  <span class="brand">Проверка контрагента</span>
+  <nav>
+    <a href="/">Проверки</a>
+    <a href="/report.html" aria-current="page">Отчёт</a>
+    <a href="/mcp.html">MCP-сервер</a>
+  </nav>
+  <div class="search"><input type="search" placeholder="ИНН или наименование контрагента" aria-label="Поиск контрагента"></div>
+</header>
+
+<main id="main">
+<div class="wrap">
+
+  <section class="section" id="s-company">
+    <span class="section__id">S-02.1 · карточка компании</span>
+    <h1>ООО «Ромашка»</h1>
+    <p><span class="tag tag--risk">итоговый риск: высокий</span> <span class="muted small">оценка агента, 3 из 5 факторов</span></p>
+    <dl class="kv">
+      <dt>Полное наименование</dt><dd>Общество с ограниченной ответственностью «Ромашка»</dd>
+      <dt>ИНН / ОГРН</dt><dd>7701234567 / 1157746000000</dd>
+      <dt>Адрес</dt><dd>г. Москва, ул. Примерная, д. 1</dd>
+      <dt>Статус в ЕГРЮЛ</dt><dd>действующее</dd>
+    </dl>
+    <p class="note">// набор полей карточки — из описания отчёта в case_info.md; значения вымышленные</p>
+  </section>
+
+  <section class="section" id="s-risks">
+    <span class="section__id">S-02.2 · риски (вывод агента)</span>
+    <h2>Что нашёл агент</h2>
+    <div class="grid g2">
+      <div class="card"><p class="card__title">Массовый адрес регистрации</p><p class="card__meta">по адресу зарегистрировано 40+ юрлиц</p></div>
+      <div class="card"><p class="card__title">Судебные споры как ответчик</p><p class="card__meta">4 дела за 12 мес. на сумму 8,2 млн ₽</p></div>
+      <div class="card"><p class="card__title">Снижение выручки</p><p class="card__meta">−34% год к году</p></div>
+      <div class="card"><p class="card__title">Директор сменился 2 раза за год</p><p class="card__meta">частая смена ЕИО</p></div>
+    </div>
+    <p class="note">// формулировки рисков должен выдавать агент по входным данным, без домыслов — см. «Диалог основан только на доступных входных данных»</p>
+  </section>
+
+  <section class="section" id="s-finance">
+    <span class="section__id">S-02.3 · финансы</span>
+    <h2>Финансовые показатели</h2>
+    <div class="grid g3">
+      <div class="card"><p class="card__title">Выручка</p><p class="card__meta">312 млн ₽ (2025)</p></div>
+      <div class="card"><p class="card__title">Чистая прибыль</p><p class="card__meta">−4,1 млн ₽ (2025)</p></div>
+      <div class="card"><p class="card__title">Активы</p><p class="card__meta">98 млн ₽</p></div>
+    </div>
+    <div class="ph" style="min-height:140px;margin-top:14px">виджет: динамика выручки и прибыли по годам</div>
+    <p class="note">// в интерфейсе кейс допускает виджеты и диаграммы поверх текста — здесь плейсхолдер графика</p>
+  </section>
+
+  <section class="section" id="s-courts">
+    <span class="section__id">S-02.4 · суды и реестры</span>
+    <h2>Судебные дела и реестры ФНС</h2>
+    <table class="tbl">
+      <thead><tr><th>Дело</th><th>Роль</th><th>Сумма</th><th>Статус</th></tr></thead>
+      <tbody>
+        <tr><td>А40-111111/2025</td><td>ответчик</td><td>5,0 млн ₽</td><td>на рассмотрении</td></tr>
+        <tr><td>А40-222222/2025</td><td>ответчик</td><td>2,1 млн ₽</td><td>решение против</td></tr>
+        <tr><td>А40-333333/2024</td><td>истец</td><td>0,4 млн ₽</td><td>завершено</td></tr>
+      </tbody>
+    </table>
+    <dl class="kv">
+      <dt>Реестр недобросовестных поставщиков</dt><dd>не числится</dd>
+      <dt>Блокировка счетов ФНS</dt><dd>нет данных</dd>
+    </dl>
+    <p class="note">// «Блокировка счетов» — намеренная опечатка в подписи, проверка ловли таких на ревью</p>
+  </section>
+
+  <section class="section" id="s-chat">
+    <span class="section__id">S-02.5 · диалог с агентом</span>
+    <h2>Уточнить у агента</h2>
+    <div class="chat">
+      <div class="msg msg--user">Почему риск высокий?</div>
+      <div class="msg msg--bot">Три фактора: массовый адрес регистрации, 4 судебных дела как ответчик за год и падение выручки на 34%. Подробности — в блоке «Что нашёл агент».</div>
+      <div class="msg msg--user">Есть ли текущие блокировки счетов?</div>
+      <div class="msg msg--bot">Во входных данных отчёта этой информации нет. Ответить не могу.</div>
+      <form>
+        <input type="text" placeholder="Ваш вопрос по этому контрагенту" aria-label="Вопрос агенту">
+        <button type="submit">Спросить</button>
+      </form>
+    </div>
+    <p class="note">// агент отвечает только по данным отчёта; вопросы вне данных — честный отказ, а не догадка</p>
+  </section>
+
+</div>
+</main>
+
+<footer class="ftr">
+  <span>Каркас для ревью · vibe-debug</span>
+  <span style="margin-left:auto">данные вымышленные</span>
+</footer>
+
+<script src="/assets/vibe-debug.js?v=20260828-vibe21" defer></script>
+</body>
+</html>

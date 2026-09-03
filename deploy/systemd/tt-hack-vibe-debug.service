@@ -13,6 +13,7 @@ Environment=VIBE_DEBUG_HOST=127.0.0.1
 Environment=VIBE_DEBUG_PORT=8788
 Environment=VIBE_DEBUG_ROOT=/opt/tt-hack/preview
 Environment=VIBE_DEBUG_DATA=/opt/tt-hack-review/comments.json
+Environment=VIBE_DEBUG_MARKS=/opt/tt-hack-review/marks.json
 Environment=VIBE_DEBUG_ATTACHMENTS=/opt/tt-hack-review/attachments
 ExecStart=/usr/bin/python3 /opt/tt-hack/scripts/vibe_debug_server.py
 Restart=on-failure

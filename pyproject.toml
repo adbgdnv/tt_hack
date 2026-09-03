@@ -28,7 +28,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "." — чтобы tests/test_vibe_debug_server.py видел пакет scripts/
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 100
