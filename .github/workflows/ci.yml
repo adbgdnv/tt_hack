@@ -26,3 +26,15 @@ jobs:
         # выгрузка кейсодателя лежит вне репозитория, поэтому тесты,
         # которым нужны данные, помечены и здесь пропускаются
         run: pytest -q
+
+      - name: Проверить деплой-скрипты
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck scripts/preview_common.sh scripts/preview_smoke.sh \
+            scripts/preview_deploy.sh scripts/preview_rollback.sh
+          # FR-005: автодеплой не касается каталога данных ревью, systemd и docker
+          if grep -REn '/opt/tt-hack-review|systemctl|(^|[^.])docker ' \
+             scripts/preview_common.sh scripts/preview_smoke.sh \
+             scripts/preview_deploy.sh scripts/preview_rollback.sh; then
+            echo "::error::деплой-скрипт трогает запретное (см. FR-005)"; exit 1
+          fi
