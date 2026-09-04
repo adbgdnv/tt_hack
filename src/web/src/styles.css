@@ -102,17 +102,14 @@ input:focus-visible,
   cursor: pointer;
 }
 
+/* Только литера, без словесного знака: так знак стоит в шапке alfabank.ru.
+   32px против прежних 24 — знак должен читаться как якорь страницы,
+   а не как иконка рядом с текстом. */
 .brand__mark {
   display: block;
   flex: none;
-  width: 24px;
-  height: 24px;
-}
-
-.brand__name {
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.04em;
+  width: 32px;
+  height: 32px;
 }
 
 .app-header__product {
@@ -168,7 +165,9 @@ input:focus-visible,
 
 .home {
   max-width: 1240px;
-  padding: 64px 0 96px;
+  /* Воздуха меньше прежнего (было 64/96): экран открывается заголовком
+     и полем поиска, а не пустотой над ними. */
+  padding: 36px 0 64px;
 }
 
 .hero {
@@ -178,10 +177,12 @@ input:focus-visible,
 }
 
 .hero h1 {
-  margin: 16px 0 14px;
-  font-size: 48px;
-  line-height: 1.08;
-  letter-spacing: -0.03em;
+  margin: 12px 0 12px;
+  /* 60px против прежних 48: заголовок — единственное, что должно
+     останавливать взгляд на этом экране. */
+  font-size: 60px;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
 }
 
 .hero > p {
@@ -195,7 +196,7 @@ input:focus-visible,
 .search {
   position: relative;
   max-width: 640px;
-  margin: 28px auto 0;
+  margin: 22px auto 0;
   text-align: left;
   z-index: 4;
 }
@@ -429,25 +430,50 @@ input:focus-visible,
 }
 
 .source-lights__row {
-  display: flex;
-  gap: 40px;
-  flex-wrap: wrap;
-  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.source-lights__value {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.source-lights__caption {
+/* Цветом залит весь блок, а не значок: оценка считывается боковым зрением.
+   Заливка мягкая, а левый кант насыщенный — так цвет читается, но не спорит
+   с собственным выводом сервиса ниже, который и должен забирать внимание. */
+.rating {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 5px;
-  color: var(--ink-tertiary);
+  padding: 14px 16px;
+  border-radius: 12px;
+  border-left: 4px solid var(--rating-edge);
+  background: var(--rating-fill);
+}
+
+.rating--green { --rating-edge: #0d9336; --rating-fill: #edf7f0; }
+.rating--orange { --rating-edge: #e07f0e; --rating-fill: #fdf4e8; }
+.rating--red { --rating-edge: #ec2d20; --rating-fill: #fdeeed; }
+.rating--grey { --rating-edge: #9a9da4; --rating-fill: #f2f3f5; }
+
+/* Владелец оценки — текстом: «Банк России» рядом с ЗСК объясняет,
+   почему сервис её не оспаривает. */
+.rating__owner {
   font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.rating__kind {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rating__value {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 28px;
+  color: var(--rating-edge);
 }
 
 .source-lights__caption strong {

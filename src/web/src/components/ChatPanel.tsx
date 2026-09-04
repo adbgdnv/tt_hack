@@ -248,7 +248,6 @@ export function ChatPanel({ report, onToast }: {
           <span className="ai-mark">AI</span>
           <div><h2>Чат по отчёту</h2><small>Задайте вопрос своими словами</small></div>
         </div>
-        <span className="chat-memory">Память в этой сессии</span>
       </header>
 
       <div
@@ -263,7 +262,6 @@ export function ChatPanel({ report, onToast }: {
         <div className="agent-message agent-message--summary">
           <span className="message-author">Ассистент</span>
           <p>Отвечаю только по этому отчёту. Чего в нём нет — так и скажу.</p>
-          <span className="summary-note">Оценки риска не пересчитываю, объясняю.</span>
         </div>
 
         {messages.map((message) =>

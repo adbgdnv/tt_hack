@@ -360,3 +360,34 @@ function parseEvent(block: string): ChatEvent | null {
     return null; // недописанное событие лучше пропустить, чем уронить ленту
   }
 }
+
+/**
+ * Дата, на которую собраны данные.
+ *
+ * Раньше в карточке стояло «Данные отчёта на дата не указана»: поле было
+ * заглушкой, которую нечем заполнить — ни `/counterparties/{инн}`, ни отчёт
+ * даты не отдают. Настоящая дата есть у набора: сервис сообщает, когда тот
+ * собран, и это и есть свежесть данных.
+ *
+ * Спрашиваем один раз на загрузку страницы: набор на сервере меняется
+ * выкаткой, а не в течение сессии.
+ */
+let датаНабора: Promise<string | null> | null = null;
+
+export function datasetDate(): Promise<string | null> {
+  if (!apiBase) return Promise.resolve(null);
+  датаНабора ??= fetch(`${apiBase}/health`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      const iso = d?.dataset?.built_at;
+      if (!iso) return null;
+      const дата = new Date(iso);
+      return Number.isNaN(дата.getTime())
+        ? null
+        : дата.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    })
+    // Дата — не то, ради чего пользователь пришёл: не смогли узнать, просто
+    // не показываем. Строка-заглушка хуже отсутствующей строки.
+    .catch(() => null);
+  return датаНабора;
+}

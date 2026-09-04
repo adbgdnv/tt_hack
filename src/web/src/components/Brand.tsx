@@ -24,7 +24,6 @@ export function Brand({ onHome }: BrandProps) {
   return (
     <button className="brand" type="button" onClick={onHome} aria-label="На главную">
       <AlfaMark />
-      <span className="brand__name">АЛЬФА-БАНК</span>
     </button>
   );
 }

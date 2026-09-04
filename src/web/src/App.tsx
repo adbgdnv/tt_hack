@@ -8,7 +8,7 @@ import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop'
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { DocumentPdfMIcon } from '@alfalab/icons-glyph/DocumentPdfMIcon';
 import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
-import { getCounterparty, getReport, sectionsFromCompany, searchCounterparties } from './api';
+import { getCounterparty, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
 import type { Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
 import { deriveVerdict } from './verdict';
 import { BlockModal } from './components/BlockModal';
@@ -139,7 +139,7 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
 
         <section className="history">
           <div className="section-heading">
-            <div><span className="eyebrow">История</span><h2>Недавние проверки</h2></div>
+            <div><h2>Недавние проверки</h2></div>
           </div>
           {history.length > 0 ? (
             <div className="history-grid">
@@ -207,6 +207,17 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
   const zskValue = report?.zsk_risk.value ?? company.bankLight;
   const verdict = deriveVerdict(sections);
 
+  // Дата, на которую собраны данные. Спрашиваем у сервиса, а не подставляем
+  // заглушку: раньше в карточке стояло «Данные отчёта на дата не указана».
+  const [dataDate, setDataDate] = useState<string | null>(null);
+  useEffect(() => {
+    let живо = true;
+    void datasetDate().then((д) => живо && setDataDate(д));
+    return () => {
+      живо = false;
+    };
+  }, []);
+
   return (
     <>
       <AppHeader compact onHome={onHome} />
@@ -221,7 +232,7 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
                   <span>ИНН {company.inn}</span>
                 </div>
                 <h1>{company.name}</h1>
-                <p>Данные отчёта на {company.dataDate}</p>
+                {dataDate && <p>Данные на {dataDate}</p>}
                 {contactFacts.length > 0 && (
                   <dl className="company-header__contacts">
                     {contactFacts.map((fact) => (
@@ -269,15 +280,10 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
                     bank={{ known: bankKnown, value: bankValue }}
                     zsk={{ known: zskKnown, value: zskValue }}
                   />
-                  <VerdictBanner
-                    verdict={verdict}
-                    showGaps={bankKnown && zskKnown}
-                    onOpenSection={onOpenBlock}
-                  />
+                  <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />
 
                   <div className="blocks-heading">
                     <div>
-                      <span className="eyebrow">Данные отчёта</span>
                       <h2>Разделы проверки</h2>
                     </div>
                     <TooltipDesktop content="Порядок разделов постоянный. Недостаток данных не означает отсутствие рисков">
