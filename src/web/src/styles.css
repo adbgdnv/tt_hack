@@ -1434,3 +1434,73 @@ input:focus-visible,
   font-style: italic;
   color: var(--color-light-text-tertiary, #8d8d93);
 }
+
+/* ─── Работа агента в ленте ─────────────────────────────────────────────
+   Инструмент добавляет паузу внутри ответа. Без объяснения эта пауза читается
+   как зависание, поэтому шаг виден — но свёрнутым, чтобы не мешать читать ответ. */
+.agent-step {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--color-light-text-secondary, #6b7683);
+}
+
+.agent-step > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--color-light-bg-secondary, #f3f4f5);
+  display: inline-block;
+}
+
+.agent-step > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-step > span {
+  display: block;
+  padding: 6px 8px 0;
+}
+
+/* Курсор набора: видно, что ответ ещё идёт, а не оборвался. */
+.agent-caret {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: agent-caret-blink 1s step-end infinite;
+}
+
+@keyframes agent-caret-blink {
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-caret { animation: none; }
+}
+
+.agent-message__chart {
+  margin-top: 12px;
+}
+
+/* Внешние источники держим визуально отдельно от фактов отчёта: слияние слоёв
+   ломает проверяемость — пользователь не отличит выверенное от найденного. */
+.agent-message__sources {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-light-status-attention, #f5a623);
+  background: var(--color-light-bg-secondary, #f3f4f5);
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+}
+
+.agent-message__sources ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.agent-message__sources a {
+  color: var(--color-light-text-link, #0072ef);
+}

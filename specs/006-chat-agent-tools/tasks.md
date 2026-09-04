@@ -22,9 +22,9 @@ description: "Task list template for feature implementation"
 
 ## Phase 1: Setup
 
-- [ ] T001 Добавить `langchain>=1.4`, `langgraph>=1.2`, `langchain-mcp-adapters>=0.3`
+- [X] T001 Добавить `langchain>=1.4`, `langgraph>=1.2`, `langchain-mcp-adapters>=0.3`
   в `pyproject.toml` (62 → 69 пакетов, обосновано в plan.md)
-- [ ] T002 [P] Описать `TAVILY_API_KEY` в `.env.example`: без него поиск выключен,
+- [X] T002 [P] Описать `TAVILY_API_KEY` в `.env.example`: без него поиск выключен,
   остальное работает
 
 ---
@@ -34,14 +34,14 @@ description: "Task list template for feature implementation"
 **Зачем отдельной фазой**: и поток без инструментов, и поток с инструментами идут
 через одного агента. Собрать его сразу — значит не писать путь потока дважды.
 
-- [ ] T003 Контекст выполнения с записью о компании в `src/api/agent/graph.py`:
+- [X] T003 Контекст выполнения с записью о компании в `src/api/agent/graph.py`:
   запись кладётся туда, в промпт не попадает (31 000 токенов на типовой компании)
-- [ ] T004 Сборка агента через `langchain.agents.create_agent` с пустым списком
+- [X] T004 Сборка агента через `langchain.agents.create_agent` с пустым списком
   инструментов и пределом в три шага в `src/api/agent/graph.py`
-- [ ] T005 Преобразование потока агента в события контракта в `src/api/agent/events.py`:
+- [X] T005 Преобразование потока агента в события контракта в `src/api/agent/events.py`:
   `AIMessageChunk` с текстом → `token`, с `tool_call_chunks` → `tool_start`,
   `ToolMessage` → `tool_end`
-- [ ] T006 [P] Тест разбора кусков потока в `tests/test_events.py` — на заготовках,
+- [X] T006 [P] Тест разбора кусков потока в `tests/test_events.py` — на заготовках,
   без обращения к модели
 
 **Checkpoint**: агент собирается и отдаёт события, ручки ещё нет
@@ -57,23 +57,23 @@ description: "Task list template for feature implementation"
 
 ### Тесты
 
-- [ ] T007 [P] [US1] Тест ручки потока в `tests/test_stream.py`: события приходят
+- [X] T007 [P] [US1] Тест ручки потока в `tests/test_stream.py`: события приходят
   по одному, последнее — `done`
-- [ ] T008 [P] [US1] Тест в `tests/test_stream.py`, что отказ модели приходит
+- [X] T008 [P] [US1] Тест в `tests/test_stream.py`, что отказ модели приходит
   событием `error`, за ним следует `done`, а соединение не рвётся
 
 ### Реализация
 
-- [ ] T009 [US1] Ручка `POST /chat/stream` в `src/api/main.py`, отдаёт
+- [X] T009 [US1] Ручка `POST /chat/stream` в `src/api/main.py`, отдаёт
   `text/event-stream` по контракту `contracts/stream.md`
-- [ ] T010 [US1] Обычный `POST /chat` оставить без изменений в `src/api/main.py` —
+- [X] T010 [US1] Обычный `POST /chat` оставить без изменений в `src/api/main.py` —
   его читают MCP-сервер и программные клиенты
-- [ ] T011 [US1] Прекращение работы при разрыве соединения клиентом
+- [X] T011 [US1] Прекращение работы при разрыве соединения клиентом
   в `src/api/main.py`: недоеденный ответ продолжал бы тратить общую квоту
-- [ ] T012 [US1] Чтение потока через `fetch` + `ReadableStream` в `src/web/src/api.ts`
+- [X] T012 [US1] Чтение потока через `fetch` + `ReadableStream` в `src/web/src/api.ts`
   (`EventSource` не умеет POST)
-- [ ] T013 [US1] Отрисовка текста по мере прихода в `src/web/src/components/ChatPanel.tsx`
-- [ ] T014 [US1] `proxy_buffering off` в блоке `/api/` в
+- [X] T013 [US1] Отрисовка текста по мере прихода в `src/web/src/components/ChatPanel.tsx`
+- [X] T014 [US1] `proxy_buffering off` в блоке `/api/` в
   `deploy/nginx/tt-hack-review.conf` — иначе nginx копит ответ и отдаёт целиком
 
 **Checkpoint**: US1 работает и проверяема без единого инструмента
@@ -89,24 +89,24 @@ description: "Task list template for feature implementation"
 
 ### Тесты
 
-- [ ] T015 [P] [US2] Тест в `tests/test_tools.py`: результат `show_chart` содержит
+- [X] T015 [P] [US2] Тест в `tests/test_tools.py`: результат `show_chart` содержит
   числа из `core/charts.py`, а не только подтверждение — иначе модель дописывает
   выдуманную таблицу (research.md, п. 1)
-- [ ] T016 [P] [US2] Тест отказа в `tests/test_tools.py`: недоступный вид даёт
+- [X] T016 [P] [US2] Тест отказа в `tests/test_tools.py`: недоступный вид даёт
   перечисление доступных, событие `chart` не отправляется
-- [ ] T017 [P] [US2] Тест в `tests/test_tools.py`, что описание инструмента
+- [X] T017 [P] [US2] Тест в `tests/test_tools.py`, что описание инструмента
   содержит русское название каждого вида — без них модель промахивается выбором
 
 ### Реализация
 
-- [ ] T018 [US2] Инструмент `show_chart` в `src/api/agent/tools.py`: интерфейсу
+- [X] T018 [US2] Инструмент `show_chart` в `src/api/agent/tools.py`: интерфейсу
   ключ, модели числа, оба из `core/charts.py`
-- [ ] T019 [US2] Русские названия видов в описании инструмента в
+- [X] T019 [US2] Русские названия видов в описании инструмента в
   `src/api/agent/tools.py` по `contracts/tools.md`
-- [ ] T020 [US2] Список доступных для компании видов в промпт в
+- [X] T020 [US2] Список доступных для компании видов в промпт в
   `src/api/agent/prompt.py` — у 22 компаний из 200 нет ни одного
-- [ ] T021 [US2] Событие `chart` (ключ и ИНН, без данных) в `src/api/agent/events.py`
-- [ ] T022 [US2] Отрисовка графика в ленте существующим `ReportChart`
+- [X] T021 [US2] Событие `chart` (ключ и ИНН, без данных) в `src/api/agent/events.py`
+- [X] T022 [US2] Отрисовка графика в ленте существующим `ReportChart`
   в `src/web/src/components/ChatPanel.tsx` — числа берутся из загруженного отчёта
 
 **Checkpoint**: US1 и US2 работают независимо
@@ -122,17 +122,17 @@ description: "Task list template for feature implementation"
 
 ### Тесты
 
-- [ ] T023 [P] [US3] Тест в `tests/test_events.py`: порядок событий
+- [X] T023 [P] [US3] Тест в `tests/test_events.py`: порядок событий
   `tool_start` → `chart` → `tool_end` соблюдается
-- [ ] T024 [P] [US3] Тест в `tests/test_events.py`, что ошибка инструмента
+- [X] T024 [P] [US3] Тест в `tests/test_events.py`, что ошибка инструмента
   доходит до события `tool_end` с признаком неудачи, а не проглатывается
 
 ### Реализация
 
-- [ ] T025 [US3] Человеческие названия действий в `src/api/agent/events.py`:
+- [X] T025 [US3] Человеческие названия действий в `src/api/agent/events.py`:
   «Строю график „Суммы исков по годам"», а не имя функции с аргументами
-- [ ] T026 [US3] Сворачиваемая строка о вызове в `src/web/src/components/ChatPanel.tsx`
-- [ ] T027 [US3] Показ ошибки инструмента в ленте в
+- [X] T026 [US3] Сворачиваемая строка о вызове в `src/web/src/components/ChatPanel.tsx`
+- [X] T027 [US3] Показ ошибки инструмента в ленте в
   `src/web/src/components/ChatPanel.tsx`
 
 **Checkpoint**: работа агента видна пользователю
@@ -148,28 +148,28 @@ description: "Task list template for feature implementation"
 
 ### Тесты
 
-- [ ] T028 [P] [US4] Тест в `tests/test_search.py` на подставном клиенте:
+- [X] T028 [P] [US4] Тест в `tests/test_search.py` на подставном клиенте:
   результат урезан до трёх находок, каждая со ссылкой — без обращения в сеть
-- [ ] T029 [P] [US4] Тест в `tests/test_search.py`, что без ключа инструмент
+- [X] T029 [P] [US4] Тест в `tests/test_search.py`, что без ключа инструмент
   модели не предлагается вовсе — описание неработающего инструмента стоило бы
   токенов на каждом вызове
-- [ ] T030 [P] [US4] Тест в `tests/test_search.py`, что недоступность сервера
+- [X] T030 [P] [US4] Тест в `tests/test_search.py`, что недоступность сервера
   поиска оставляет ответ по отчёту целым
 
 ### Реализация
 
-- [ ] T031 [US4] Клиент MCP поставщика в `src/api/agent/search.py` через
+- [X] T031 [US4] Клиент MCP поставщика в `src/api/agent/search.py` через
   `langchain-mcp-adapters`; в `src/core` не попадает — конституция исключает MCP из ядра
-- [ ] T032 [US4] Инструмент `web_search` со своей узкой схемой в
+- [X] T032 [US4] Инструмент `web_search` со своей узкой схемой в
   `src/api/agent/tools.py`: один параметр `query` (~60 токенов против 890 у схемы
   поставщика), остальные значения задаём сами
-- [ ] T033 [US4] Из пяти инструментов сервера модели описывается только поиск
+- [X] T033 [US4] Из пяти инструментов сервера модели описывается только поиск
   в `src/api/agent/search.py` — все пять стоят 2383 токена на каждом вызове
-- [ ] T034 [US4] Правила разделения слоёв в `src/api/agent/prompt.py`:
+- [X] T034 [US4] Правила разделения слоёв в `src/api/agent/prompt.py`:
   «по отчёту» и «во внешних источниках», приоритет отчёта при расхождении
-- [ ] T035 [US4] Событие `sources` в `src/api/agent/events.py` и отрисовка ссылок
+- [X] T035 [US4] Событие `sources` в `src/api/agent/events.py` и отрисовка ссылок
   в `src/web/src/components/ChatPanel.tsx`
-- [ ] T036 [US4] Протащить `TAVILY_API_KEY` при деплое в
+- [X] T036 [US4] Протащить `TAVILY_API_KEY` при деплое в
   `.github/workflows/deploy.yml` по образцу `LANGSMITH_API_KEY`
 
 **Checkpoint**: все истории работают независимо
@@ -181,8 +181,8 @@ description: "Task list template for feature implementation"
 - [ ] T037 Прогнать [quickstart.md](quickstart.md) вручную на 5032257375, включая
   главную проверку честности: после показа графика спросить «объясни его» и убедиться,
   что нет ни одного года и ни одной суммы вне отчёта
-- [ ] T038 [P] Описать поток и инструменты в `docs/architecture.md`
-- [ ] T039 [P] Записать в `deploy/PREVIEW-DEPLOY.md` про `proxy_buffering off`
+- [X] T038 [P] Описать поток и инструменты в `docs/architecture.md`
+- [X] T039 [P] Записать в `deploy/PREVIEW-DEPLOY.md` про `proxy_buffering off`
   и про ключ поиска
 - [ ] T040 Прогнать `ruff` и `pytest`, отметить задачи `[X]`, зафиксировать и выложить
 

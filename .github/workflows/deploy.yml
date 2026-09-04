@@ -49,6 +49,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
           if [ -z "${LLM_API_KEY}" ]; then
             echo "LLM_API_KEY не задан — пропускаю"; exit 0
@@ -69,6 +70,7 @@ jobs:
             "${TRACING_LINES}" \
             "LANGSMITH_API_KEY=${LANGSMITH_API_KEY}" \
             "LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-counterparty-checker}" \
+            "TAVILY_API_KEY=${TAVILY_API_KEY}" \
           | ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'umask 077 && cat > /opt/tt-hack/.env'
           echo "окружение записано в /opt/tt-hack/.env"
           # Контейнер подхватит его при следующем `docker compose up -d api`:
