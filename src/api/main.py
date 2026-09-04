@@ -13,9 +13,11 @@ from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.agent import loop
+from api.agent import tools as agent_tools
 from core import repo, slim
 from core import report as report_view
 
@@ -116,6 +118,45 @@ def get_counterparty(inn: str) -> dict:
     if report is None:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     return slim.slim(report)
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest) -> StreamingResponse:
+    """Тот же диалог, но событиями по мере работы агента.
+
+    Контракт — `specs/006-chat-agent-tools/contracts/stream.md`. Обычный `/chat`
+    остаётся рядом: его читают MCP-сервер и программные клиенты, поток они
+    не понимают.
+
+    Сбой отдаётся событием внутри потока, а не кодом ответа: заголовки уже ушли
+    к моменту, когда модель отказывает, и уже показанный пользователю текст
+    должен остаться на экране.
+    """
+    record = repo.by_inn(request.inn)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    built = report_view.build(record)
+    session = loop.session(request.session_id)
+
+    async def events():
+        stream = loop.run_stream(
+            session, built, record, request.message, agent_tools.build(record, request.inn)
+        )
+        # Разрыв соединения клиентом отменяет задачу и закрывает генератор:
+        # недоеденный ответ продолжал бы тратить квоту, общую на всех.
+        async for event in stream:
+            yield event.encode()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # Подсказка nginx на случай, если в конфиге забыли proxy_buffering off:
+            # без неё поток копится в буфере и приходит целиком.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/chat")

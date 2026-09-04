@@ -14,11 +14,17 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
+from api.agent import events, graph, prompt
 from api.agent.prompt import build_messages
+from core.charts import build_charts
 from core.llm import LLMClient
 from core.report import Report
+
+PROVIDER_DOWN = "Сервис разбора сейчас недоступен. Отчёт выше остаётся полным."
+EMPTY_ANSWER = "Модель не смогла сформулировать ответ. Попробуйте переспросить короче."
 
 # Сколько пар «вопрос-ответ» держим. Ограничение не про память, а про токены:
 # у провайдера лимит считает вход, и растущая история съела бы минутную квоту.
@@ -102,3 +108,62 @@ def run(state: Session, report: Report, question: str, client: LLMClient | None 
         raise RuntimeError("Модель вернула пустой ответ")
     state.remember(question, text)
     return Answer(text=text, sections=_grounding(report, text))
+
+
+async def run_stream(
+    state: Session,
+    report: Report,
+    record: dict,
+    question: str,
+    tools: list | None = None,
+) -> AsyncIterator[events.Event]:
+    """Прогоняет шаг диалога, отдавая события по мере работы агента.
+
+    Асинхронный намеренно. Синхронный генератор Starlette крутит в пуле потоков,
+    и каждый поток занят всё время ответа: на длинных потоках пул кончается
+    и блокирует весь сервис, включая обычные ручки. Одновременных пользователей
+    при этом было бы столько, сколько потоков в пуле.
+
+    Отличается от `run` не только транспортом: здесь у модели есть инструменты,
+    и запись о контрагенте целиком уезжает в контекст выполнения, откуда её
+    читают они. В промпт запись не попадает — 31 000 токенов на типовой компании
+    при лимите провайдера 8 000 в минуту.
+
+    Непотоковый `run` остаётся: его читают MCP-сервер и программные клиенты,
+    поток они не понимают.
+    """
+    state.focus(report.inn)
+    charts = {c.key: c for c in build_charts(record)}
+    titles = [c.title for c in charts.values()]
+    agent = graph.build(tools or [], prompt.system_prompt(report, titles))
+    translator = events.Translator(charts)
+
+    said: list[str] = []
+    try:
+        stream = agent.astream(
+            {"messages": prompt.conversation(question, state.history)},
+            context=graph.Context(record=record, report=report),
+            stream_mode="messages",
+            config={"recursion_limit": graph.MAX_STEPS * 2},
+        )
+        async for chunk, _meta in stream:
+            for event in translator.feed(chunk):
+                if event.name == "token":
+                    said.append(event.data["text"])
+                yield event
+    except Exception:  # noqa: BLE001 — наружу уходит одно понятное событие
+        # Ошибка приходит событием, а не обрывом потока: уже показанный текст
+        # остаётся у пользователя, и он видит причину, а не молчание.
+        yield events.Event("error", {"detail": PROVIDER_DOWN})
+    else:
+        if not "".join(said).strip():
+            # У gpt-oss рассуждение тратит токены из того же лимита и способно
+            # съесть весь бюджет, оставив ответ пустым. Пустой ответ после
+            # показанного вызова инструмента выглядит как поломка, а не как
+            # «мне нечего сказать».
+            yield events.Event("error", {"detail": EMPTY_ANSWER})
+
+    text = "".join(said).strip()
+    if text:
+        state.remember(question, text)
+    yield events.Event("done", {"sections": list(_grounding(report, text))})

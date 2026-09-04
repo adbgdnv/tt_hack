@@ -10,11 +10,15 @@ dependencies = [
     "httpx>=0.28",
     "mcp>=1.2",
     "langchain-openai>=1.6",
+    "langchain>=1.4",
+    "langgraph>=1.2",
+    "langchain-mcp-adapters>=0.3",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
+    "pytest-asyncio>=1.0",
     "ruff>=0.8",
 ]
 
@@ -31,6 +35,9 @@ where = ["src"]
 testpaths = ["tests"]
 # "." — чтобы tests/test_vibe_debug_server.py видел пакет scripts/
 pythonpath = ["src", "."]
+# Поток ответа асинхронный, значит и его тесты тоже. "auto" — чтобы не помечать
+# каждый async-тест вручную: помеченным должен быть отход от правила, а не правило.
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,115 @@
+"""Поиск во внешних открытых источниках через MCP поставщика.
+
+Ходим к Tavily по MCP, а не через их библиотеку: продукт становится не только
+MCP-сервером, но и MCP-клиентом. Организаторы прямо сказали, что видят решение
+«как MCP-тул» — так оно оказывается по обе стороны протокола.
+
+Модели описываем **свой** инструмент с единственным параметром, а не их. Замерено
+на живом ключе: схема их `tavily_search` стоит 890 токенов, все пять инструментов
+их сервера — 2383 токена, и это уходит в модель на каждом вызове при лимите
+8 000 токенов в минуту. Своя схема — около 60 токенов, остальные значения
+задаём сами.
+
+Иерархия источников задана кейсодателем дословно: «Приоритетность именно та,
+которая есть в отчётах. А выше — это либо должно не конфликтовать, либо
+подтверждаться данными из Альфы». Поэтому найденное здесь — всегда со ссылкой
+и всегда отдельным слоем; смешивать с фактами отчёта нельзя.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+
+from langchain_core.tools import tool
+
+MCP_URL = "https://mcp.tavily.com/mcp/?tavilyApiKey={key}"
+REMOTE_TOOL = "tavily_search"
+
+# Сколько находок доводим до модели. Бюджет токенов общий с ответом: один
+# неурезанный ответ поиска — около 570 токенов.
+MAX_RESULTS = 3
+SNIPPET = 300
+
+_remote = None  # загруженный инструмент их сервера; грузится один раз
+
+
+def enabled() -> bool:
+    """Настроен ли поиск. Без ключа инструмент модели не предлагается вовсе."""
+    return bool(os.environ.get("TAVILY_API_KEY"))
+
+
+async def _load():
+    """Забирает нужный инструмент с сервера поставщика.
+
+    Из пяти доступных берём один. Остальные четыре — обход сайтов, карта ссылок,
+    извлечение страниц, глубокое исследование — стоили бы 1493 токена схем
+    на каждом вызове модели и продукту не нужны.
+    """
+    from langchain_mcp_adapters.client import MultiServerMCPClient
+
+    url = MCP_URL.format(key=os.environ["TAVILY_API_KEY"])
+    client = MultiServerMCPClient({"tavily": {"transport": "streamable_http", "url": url}})
+    remote = await client.get_tools()
+    return next(t for t in remote if t.name == REMOTE_TOOL)
+
+
+async def _search(query: str) -> list[dict]:
+    """Вызов чужого MCP.
+
+    Сессия поднимается на вызов: поиск случается редко, а живая сессия к чужому
+    серверу потребовала бы присмотра за переподключением ради ничего. Сам
+    инструмент грузится один раз — это описание, оно не устаревает.
+    """
+    global _remote
+    if _remote is None:
+        _remote = await _load()
+    return _shape(await _remote.ainvoke({"query": query}))
+
+
+def _shape(payload) -> list[dict]:
+    """Ответ их сервера → список находок. Лишнее отбрасываем здесь, а не в модели."""
+    if isinstance(payload, list):  # MCP отдаёт содержимое блоками
+        payload = "".join(b.get("text", "") for b in payload if isinstance(b, dict))
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return []
+    results = (payload or {}).get("results") or []
+    return [
+        {
+            "title": (r.get("title") or "").strip(),
+            "url": r.get("url") or "",
+            "snippet": (r.get("content") or "").strip()[:SNIPPET],
+        }
+        for r in results[:MAX_RESULTS]
+        if r.get("url")
+    ]
+
+
+@tool(response_format="content_and_artifact")
+async def web_search(query: str) -> tuple[str, dict]:
+    """Найти сведения во внешних открытых источниках.
+
+    Вызывай только когда отчёта для ответа не хватает. Найденное — не факт
+    из отчёта: в ответе выводи его отдельно, со ссылкой и оговоркой, что отчётом
+    это не подтверждено. При расхождении с отчётом верь отчёту и скажи о расхождении.
+    """
+    try:
+        found = await _search(query)
+    except Exception:  # noqa: BLE001 — внешняя система по сети, отказывает чаще нашего кода
+        # Ответ по отчёту важнее поиска: неудача проговаривается, но диалог живёт.
+        return "Внешний поиск сейчас недоступен. Отвечай по отчёту и скажи об этом.", {}
+    if not found:
+        return "Во внешних источниках ничего не найдено по этому запросу.", {}
+    lines = "\n".join(f"- {f['title']} ({f['url']}): {f['snippet']}" for f in found)
+    return (
+        f"Найдено во внешних источниках (отчётом не подтверждено):\n{lines}",
+        {"sources": found},
+    )
+
+
+def tools() -> list:
+    """Инструмент поиска, если он настроен. Иначе пустой список."""
+    return [web_search] if enabled() else []

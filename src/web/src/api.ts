@@ -228,3 +228,74 @@ export async function askAboutCounterparty(
   }
   return (await response.json()) as ChatReply;
 }
+
+/** Событие потока ответа. Контракт — specs/006-chat-agent-tools/contracts/stream.md. */
+export type ChatEvent =
+  | { name: 'token'; data: { text: string } }
+  | { name: 'tool_start'; data: { tool: string; title: string } }
+  | { name: 'tool_end'; data: { tool: string; ok: boolean } }
+  | { name: 'chart'; data: { chart: string; inn: string } }
+  | { name: 'sources'; data: { items: { title: string; url: string; snippet: string }[] } }
+  | { name: 'error'; data: { detail: string } }
+  | { name: 'done'; data: { sections: string[] } };
+
+/**
+ * Тот же вопрос, но ответ приходит по мере готовности.
+ *
+ * Читаем через fetch, а не через EventSource: последний умеет только GET,
+ * а вопрос уходит телом запроса. Для server-sent events с телом это обычная
+ * практика, а не обходной путь.
+ *
+ * `signal` обязателен для отмены: брошенный поток на сервере продолжал бы
+ * тратить квоту, общую на всех пользователей.
+ */
+export async function* streamChat(
+  inn: string,
+  message: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatEvent> {
+  if (!apiBase) throw new Error('Сервис разбора не настроен');
+  const response = await fetch(`${apiBase}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inn, message, session_id: sessionId }),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? 'Сервис разбора сейчас недоступен');
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  // События разделены пустой строкой, а границы кусков сети с ними не совпадают:
+  // одно событие может прийти двумя кусками, а два события — одним.
+  let buffer = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let split = buffer.indexOf('\n\n');
+      while (split !== -1) {
+        const parsed = parseEvent(buffer.slice(0, split));
+        if (parsed) yield parsed;
+        buffer = buffer.slice(split + 2);
+        split = buffer.indexOf('\n\n');
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => undefined);
+  }
+}
+
+function parseEvent(block: string): ChatEvent | null {
+  const name = block.match(/^event: (.+)$/m)?.[1];
+  const raw = block.match(/^data: (.*)$/m)?.[1];
+  if (!name || raw === undefined) return null;
+  try {
+    return { name, data: JSON.parse(raw) } as ChatEvent;
+  } catch {
+    return null; // недописанное событие лучше пропустить, чем уронить ленту
+  }
+}

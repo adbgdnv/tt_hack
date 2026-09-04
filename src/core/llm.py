@@ -67,7 +67,24 @@ class LLMClient:
         if not self.api_key:
             raise RuntimeError("Нет LLM_API_KEY — задать в .env или в окружении")
 
-    def _chat(self, max_tokens: int, temperature: float) -> ChatOpenAI:
+    def chat(
+        self,
+        max_tokens: int = 1200,
+        temperature: float = 0.2,
+        reasoning_effort: str | None = None,
+    ) -> ChatOpenAI:
+        """Настроенный клиент модели.
+
+        Публичный, потому что вызывающих двое: непотоковый `ask` здесь же
+        и сборка агента в приложении. Приватным он был, пока вызывающий был один.
+
+        `reasoning_effort` у gpt-oss управляет тем, сколько токенов уйдёт
+        на рассуждение — а тратятся они из того же бюджета ответа. Замерено:
+        при значении по умолчанию рассуждение съедает 431 токен из 700, при `low`
+        — 4. По умолчанию не задаём: непотоковый путь работает и менять его
+        поведение ради чужой задачи незачем.
+        """
+        extra = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
         return ChatOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
@@ -77,6 +94,7 @@ class LLMClient:
             timeout=self.timeout,
             max_retries=0,  # повтор решает вызывающий: тихий ретрай съедает время молча
             default_headers={"User-Agent": USER_AGENT},  # без него Cloudflare отдаёт 403
+            **extra,
         )
 
     def ask(
@@ -92,7 +110,7 @@ class LLMClient:
         `inn` и окружение уходят в запись метаданными: без них записи неразличимы —
         непонятно, о какой компании речь и пришёл ли вызов с сервера или с ноутбука.
         """
-        message = self._chat(max_tokens, temperature).invoke(
+        message = self.chat(max_tokens, temperature).invoke(
             messages,
             config={
                 "run_name": "counterparty-chat",
