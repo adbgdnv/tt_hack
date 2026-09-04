@@ -8,10 +8,14 @@ import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop'
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { DocumentPdfMIcon } from '@alfalab/icons-glyph/DocumentPdfMIcon';
 import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
-import { getCounterparty, getReport, searchCounterparties } from './api';
-import type { BlockKey, Counterparty, CounterpartyReport, HistoryItem, ReportBlock, ReportSectionData } from './types';
+import { getCounterparty, getReport, sectionsFromCompany, searchCounterparties } from './api';
+import type { Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
+import { deriveVerdict } from './verdict';
 import { BlockModal } from './components/BlockModal';
 import { Brand } from './components/Brand';
+import { CompletionBar } from './components/CompletionBar';
+import { SourceLights } from './components/SourceLights';
+import { VerdictBanner } from './components/VerdictBanner';
 // Отложенно: чат нужен только на экране компании, а тянет за собой разбор
 // разметки — 51 КБ в сжатии. На первом экране это чистый простой.
 // Ожидание срабатывает один раз при открытии компании, а не на каждое слово
@@ -22,7 +26,6 @@ const ChatPanel = lazy(() =>
 import { ReportSection } from './components/ReportSection';
 
 const HISTORY_KEY = 'counterparty-check-history-v1';
-const blockOrder: BlockKey[] = ['registration', 'finances', 'courts', 'enforcement', 'registries', 'activity'];
 const reportSectionOrder = ['registration', 'finances', 'courts', 'enforcement', 'registries', 'activity', 'management', 'related'];
 
 function readHistory(): HistoryItem[] {
@@ -42,13 +45,6 @@ function writeHistory(history: HistoryItem[]) {
   }
 }
 
-const signalLabels = {
-  green: 'Нейтральная значимость · значимых сигналов нет',
-  yellow: 'Средняя значимость · негативное направление',
-  red: 'Высокая значимость · негативное направление',
-  unknown: 'Недостаточно данных',
-};
-
 function AppHeader({ compact, onHome }: { compact?: boolean; onHome?: () => void }) {
   return (
     <header className={'app-header' + (compact ? ' app-header--compact' : '')}>
@@ -64,10 +60,10 @@ function DashboardSkeleton() {
     <main className="page dashboard-page" aria-label="Загрузка отчёта">
       <div className="skeleton-title"><Skeleton visible animate><div>Загружаем название компании</div></Skeleton></div>
       <div className="dashboard-layout">
-        <section className="blocks-grid">
-          {Array.from({ length: 6 }).map((_, index) => (
+        <section className="report-sections">
+          {Array.from({ length: 8 }).map((_, index) => (
             <Skeleton key={index} visible animate borderRadius={16}>
-              <div className="block-skeleton">Загрузка данных блока отчёта</div>
+              <div className="section-skeleton">Загрузка данных раздела</div>
             </Skeleton>
           ))}
         </section>
@@ -79,28 +75,7 @@ function DashboardSkeleton() {
   );
 }
 
-function RiskBlockCard({ block, onOpen }: { block: ReportBlock; onOpen: () => void }) {
-  return (
-    <button className="block-card" type="button" onClick={onOpen}>
-      <div className="block-card__top">
-        <div className="block-card__title">
-          <span className={'signal signal--' + block.signal} aria-hidden="true" />
-          <h3>{block.title}</h3>
-        </div>
-        <TooltipDesktop content="Ориентир на основе данных блока, не банковская оценка" position="top">
-          <span className="info-dot" aria-label="Что означает индикатор блока" onClick={(event) => event.stopPropagation()}>i</span>
-        </TooltipDesktop>
-      </div>
-      <span className="block-card__signal">{signalLabels[block.signal]}</span>
-      <ul>
-        {block.preview.slice(0, 2).map((fact) => <li key={fact}>{fact}</li>)}
-      </ul>
-      <span className="block-card__action">Разобрать <span aria-hidden="true">→</span></span>
-    </button>
-  );
-}
-
-function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFailed, history, homeChat, setHomeChat, onSearch, onSelect }: {
+function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFailed, history, onSearch, onSelect }: {
   query: string;
   setQuery: (value: string) => void;
   suggestions: Counterparty[];
@@ -108,8 +83,6 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
   notFound: boolean;
   loadFailed: boolean;
   history: HistoryItem[];
-  homeChat: boolean;
-  setHomeChat: (value: boolean) => void;
   onSearch: () => void;
   onSelect: (inn: string) => void;
 }) {
@@ -120,7 +93,10 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
         <section className="hero">
           <span className="static-label static-label--hero">Для вашего бизнеса</span>
           <h1>Проверьте контрагента<br />до начала работы</h1>
-          <p>Получите факты и цифры из отчёта, узнайте, на что обратить внимание, и разберите сложные сведения простым языком.</p>
+          <p>
+            Второй взгляд по открытым данным поверх банковского отчёта: что произошло, чем подтверждается
+            и чего два светофора не показывают.
+          </p>
           <form className="search" onSubmit={(event) => { event.preventDefault(); onSearch(); }}>
             <div className="search__control">
               <InputDesktop
@@ -160,46 +136,39 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
               </div>
             )}
           </form>
+          <span className="hero__note">Поиск идёт только по подготовленному набору</span>
         </section>
 
-        {history.length === 0 ? (
-          <section className="onboarding">
-            <div className="onboarding__copy">
-              <span className="eyebrow">Как это работает</span>
-              <h2>От ИНН до понятных следующих шагов</h2>
-              <div className="steps">
-                <div><b>1</b><span><strong>Находим отчёт</strong><small>Только во входных данных</small></span></div>
-                <div><b>2</b><span><strong>Показываем факты</strong><small>Без нового общего скоринга</small></span></div>
-                <div><b>3</b><span><strong>Помогаем проверить</strong><small>С пруфами и источниками</small></span></div>
-              </div>
-              <ButtonDesktop size={48} view="secondary" onClick={() => setHomeChat(!homeChat)}>
-                {homeChat ? 'Скрыть подсказку' : 'Открыть чат'}
-              </ButtonDesktop>
-            </div>
-            <div className="onboarding__visual">
-              <span className="ai-mark ai-mark--large">AI</span>
-              <h3>Не знаете, с чего начать?</h3>
-              <p>{homeChat ? 'Введите ИНН или название. На дашборде я предложу три вопроса по самым заметным фактам и отвечу только по отчёту.' : 'Ассистент подскажет вопросы после выбора компании.'}</p>
-              <div className="mini-proof"><strong>54</strong><span>активных производства</span><span className="static-label">ФССП · дата</span></div>
-            </div>
-          </section>
-        ) : (
+        <div className="home-columns">
           <section className="history">
             <div className="section-heading">
               <div><span className="eyebrow">История</span><h2>Недавние проверки</h2></div>
             </div>
-            <div className="history-grid">
-              {history.map((item) => (
-                <button className="history-card" key={item.inn} type="button" onClick={() => onSelect(item.inn)}>
-                  <Status size={20} view="soft" color={riskColor(item.bankRisk)}>{historyRiskLabel(item.bankRisk)}</Status>
-                  <h3>{item.name}</h3>
-                  <p>ИНН {item.inn}</p>
-                  <div><time>{item.dataDate}</time></div>
-                </button>
-              ))}
+            {history.length > 0 ? (
+              <div className="history-grid">
+                {history.map((item) => (
+                  <button className="history-card" key={item.inn} type="button" onClick={() => onSelect(item.inn)}>
+                    <Status size={20} view="soft" color={riskColor(item.bankRisk)}>{historyRiskLabel(item.bankRisk)}</Status>
+                    <h3>{item.name}</h3>
+                    <p>ИНН {item.inn}</p>
+                    <div><time>{item.dataDate}</time></div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="history-empty">Здесь появятся ваши последние проверки.</p>
+            )}
+          </section>
+
+          <section className="how-it-works">
+            <span className="eyebrow">Как это работает</span>
+            <div className="how-it-works__steps">
+              <div><b>1</b><span>Собираем отчёт из открытых источников — суды, ФССП, реестры ФНС, финансы</span></div>
+              <div><b>2</b><span>Показываем произошедшее и не шумим тем, чего не было</span></div>
+              <div><b>3</b><span>Ассистент объясняет непонятные термины и показывает пруфы</span></div>
             </div>
           </section>
-        )}
+        </div>
       </main>
     </>
   );
@@ -224,12 +193,10 @@ function orderedSections(sections: ReportSectionData[]): ReportSectionData[] {
     (rank.get(left.key) ?? reportSectionOrder.length) - (rank.get(right.key) ?? reportSectionOrder.length));
 }
 
-function headerFacts(company: Counterparty, report: CounterpartyReport | null) {
+function headerFacts(sections: ReportSectionData[]) {
   const labels = /^(Юридический адрес|Адрес|Телефон|Контакт|Контакты|Сайт|Веб-сайт|E-mail|Электронная почта)$/i;
-  const reportFacts = report?.sections.find((section) => section.key === 'registration')?.facts ?? [];
-  const fromReport = reportFacts.filter((fact) => labels.test(fact.label));
-  if (fromReport.length > 0) return fromReport.map((fact) => ({ label: fact.label, value: String(fact.value) }));
-  return company.blocks.registration.details.filter((fact) => labels.test(fact.label));
+  const facts = sections.find((section) => section.key === 'registration')?.facts ?? [];
+  return facts.filter((fact) => labels.test(fact.label)).map((fact) => ({ label: fact.label, value: String(fact.value) }));
 }
 
 function Dashboard({ company, report, openedSection, highlighted, onHome, onOpenBlock, onCloseBlock, onToast }: {
@@ -242,12 +209,16 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
   onCloseBlock: () => void;
   onToast: (message: string) => void;
 }) {
-  const contactFacts = headerFacts(company, report);
+  // Отчёт с сервера — источник, если он есть. Иначе те же 6 полей, что видит
+  // модель в сокращённом ответе API, приведённые к тому же контракту — одна
+  // отрисовка вместо двух несогласованных.
+  const sections = orderedSections(report?.sections ?? sectionsFromCompany(company));
+  const contactFacts = headerFacts(sections);
   const bankKnown = report ? report.bank_risk.known : company.bankRisk !== 'Нет данных';
   const bankValue = report?.bank_risk.value ?? company.bankRisk;
   const zskKnown = report ? report.zsk_risk.known : company.bankLight !== 'Нет данных';
   const zskValue = report?.zsk_risk.value ?? company.bankLight;
-  const sections = orderedSections(report?.sections ?? []);
+  const verdict = deriveVerdict(sections);
 
   return (
     <>
@@ -271,24 +242,6 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
                     ))}
                   </dl>
                 )}
-              </div>
-              <div className="bank-signal">
-                <div className="bank-signal__primary">
-                  <span>Оценка банка:</span>
-                  <Status size={24} view="soft" color={bankKnown ? riskColor(bankValue) : 'grey'}>
-                    {bankKnown ? bankValue : 'Оценить невозможно'}
-                  </Status>
-                </div>
-                <span className="bank-signal__method">
-                  {report?.bank_risk.source ?? 'Скоринг банка'} · методология скоринга не раскрывается
-                </span>
-                <div className="bank-signal__secondary">
-                  <span>Платформа ЗСК (Банк России):</span>
-                  <Status size={20} view="soft" color={zskKnown ? riskColor(zskValue) : 'grey'}>
-                    {zskKnown ? zskValue : 'Оценить невозможно'}
-                  </Status>
-                </div>
-                <p>Это независимые источники. Сервис показывает их оценки без пересчёта.</p>
               </div>
               <div className="report-actions">
                 {/* Печать средствами браузера: он же даёт и сохранение в файл.
@@ -317,8 +270,7 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
             <div className="dashboard-content">
               {openedSection ? (
                 <BlockModal
-                  company={company}
-                  report={report}
+                  sections={sections}
                   blockKey={openedSection}
                   highlighted={highlighted}
                   onClose={onCloseBlock}
@@ -326,6 +278,16 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
                 />
               ) : (
                 <>
+                  <SourceLights
+                    bank={{ known: bankKnown, value: bankValue }}
+                    zsk={{ known: zskKnown, value: zskValue }}
+                  />
+                  <VerdictBanner
+                    verdict={verdict}
+                    showGaps={bankKnown && zskKnown}
+                    onOpenSection={onOpenBlock}
+                  />
+
                   <div className="blocks-heading">
                     <div>
                       <span className="eyebrow">Данные отчёта</span>
@@ -336,20 +298,13 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
                     </TooltipDesktop>
                   </div>
 
-                  {report && report.signals === 0 && (
-                    <p className="report-clean">
-                      По доступным данным значимых сигналов не обнаружено.
-                      {report.unknowns > 0 && ` Недостаточно данных по разделам: ${report.unknowns}.`}
-                    </p>
-                  )}
-
                   <div className="report-sections">
-                    {report
-                      ? sections.map((section) => (
-                        <ReportSection key={section.key} section={section} onOpen={() => onOpenBlock(section.key)} />
-                      ))
-                      : blockOrder.map((key) => <RiskBlockCard key={key} block={company.blocks[key]} onOpen={() => onOpenBlock(key)} />)}
+                    {sections.map((section) => (
+                      <ReportSection key={section.key} section={section} onOpen={() => onOpenBlock(section.key)} />
+                    ))}
                   </div>
+
+                  <CompletionBar onAnswer={() => onToast('Спасибо за отзыв')} />
                 </>
               )}
             </div>
@@ -374,10 +329,9 @@ export default function App() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [company, setCompany] = useState<Counterparty | null>(null);
   // Собранный отчёт с сервера. null означает «сервер недоступен» —
-  // тогда показываются заготовленные примеры как запасной путь.
+  // тогда разделы строятся из тех же данных, что уже есть у company.
   const [report, setReport] = useState<CounterpartyReport | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
-  const [homeChat, setHomeChat] = useState(false);
   const [modalBlock, setModalBlock] = useState<string | null>(null);
 
   // Открытие адреса с ИНН ведёт к тому же отчёту — иначе постоянная ссылка бессмысленна.
@@ -388,7 +342,6 @@ export default function App() {
   }, []);
   const [highlighted, setHighlighted] = useState(false);
   const [toast, setToast] = useState('');
-  const [compare, setCompare] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -492,12 +445,6 @@ export default function App() {
     setQueryState('');
   };
 
-  const addCompare = () => {
-    if (!company || compare.some((item) => item.inn === company.inn) || compare.length >= 2) return;
-    setCompare((current) => [...current, { name: company.name, inn: company.inn, bankRisk: company.bankRisk, dataDate: company.dataDate }]);
-    setToast('Компания добавлена в сравнение');
-  };
-
   return (
     <div className="app-shell">
       {view === 'home' ? (
@@ -509,8 +456,6 @@ export default function App() {
           notFound={notFound}
           loadFailed={loadFailed}
           history={history}
-          homeChat={homeChat}
-          setHomeChat={setHomeChat}
           onSearch={submitSearch}
           onSelect={(inn) => void openCompany(inn)}
         />
@@ -526,15 +471,6 @@ export default function App() {
           onToast={setToast}
         />
       ) : <><AppHeader compact onHome={goHome} /><DashboardSkeleton /></>}
-
-      {compare.length > 0 && (
-        <div className="compare-bar">
-          <span>В сравнении: <strong>{compare.length}</strong> из 2</span>
-          <span>{compare.map((item) => item.name).join(' · ')}</span>
-          <ButtonDesktop size={40} view="secondary" onClick={() => setToast('Экран сравнения — TBU')}>Сравнить</ButtonDesktop>
-          <button type="button" aria-label="Очистить сравнение" onClick={() => setCompare([])}>×</button>
-        </div>
-      )}
 
       {toast && (
         <div className="toast-wrap" role="status">
