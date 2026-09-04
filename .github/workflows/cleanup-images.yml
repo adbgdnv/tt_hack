@@ -1,0 +1,33 @@
+name: Cleanup images
+
+# Метка на каждый коммит означает рост хранилища. Через месяц ежедневных выкаток
+# там будут сотни версий, из которых нужны единицы.
+#
+# Оставляем десять, а не одну: смысл меток в том, чтобы было куда откатиться,
+# и откат «на предыдущую» — не единственный случай. Иногда выясняется, что
+# сломалось три выкатки назад.
+on:
+  schedule:
+    # Раз в неделю, ночью по Москве. Уборка не срочная и не должна попадать
+    # на рабочее время: она трогает тот же реестр, из которого тянет выкатка.
+    - cron: "0 2 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        name: [api, web]
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: tt_hack/${{ matrix.name }}
+          package-type: container
+          min-versions-to-keep: 10
+          # latest всегда указывает на свежий образ, и удалить его значит
+          # лишить следующую сборку опоры для кэша.
+          ignore-versions: '^latest$'
