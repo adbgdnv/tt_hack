@@ -1,0 +1,39 @@
+#!/bin/bash
+# Выкатка бэкенда. Копия для истории; рабочий экземпляр лежит на сервере
+# в /usr/local/bin/ и принадлежит root.
+#
+# Почему root-owned и вне git-клона: скрипт запускается через sudo, и если бы его
+# мог править пользователь деплоя, это было бы не узкое право, а полный root.
+#
+# Разрешение выдано одной строкой в /etc/sudoers.d/tt-hack-api:
+#   ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-api-deploy
+set -euo pipefail
+
+REPO=/opt/tt-hack
+LOG_PREFIX="[api-deploy]"
+
+echo "${LOG_PREFIX} было: $(git -C "${REPO}" rev-parse --short HEAD)"
+git -C "${REPO}" fetch --quiet origin main
+git -C "${REPO}" reset --hard --quiet origin/main
+chown -R www-data:www-data "${REPO}"
+# .env пишет деплой отдельным шагом — владельца возвращаем ему
+chown ttdeploy:ttdeploy "${REPO}/.env" 2>/dev/null || true
+echo "${LOG_PREFIX} стало: $(git -C "${REPO}" rev-parse --short HEAD)"
+
+cd "${REPO}"
+docker compose up -d --build api
+
+# Пока контейнер не ответит, деплой не считается успешным: молча упавший бэкенд
+# хуже старого работающего.
+for attempt in $(seq 1 20); do
+  if curl -fsS --max-time 3 localhost:8000/health >/dev/null 2>&1; then
+    COUNT=$(curl -fsS localhost:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["dataset"]["count"])')
+    echo "${LOG_PREFIX}здоров, контрагентов: ${COUNT}"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "${LOG_PREFIX} ОШИБКА: сервис не ответил за 40 секунд" >&2
+docker logs cc-api --tail 30 >&2
+exit 1

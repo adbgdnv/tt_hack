@@ -46,13 +46,6 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
-      - name: Выложить превью
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-        run: scripts/preview_deploy.sh
-
       - name: Прокинуть окружение бэкенда
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -74,6 +67,27 @@ jobs:
           echo "окружение записано в /opt/tt-hack/.env"
           # Контейнер подхватит его при следующем `docker compose up -d api`:
           # бэкенд обновляется вручную, автодеплой его намеренно не рестартует.
+
+      - name: Выкатить бэкенд
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          # Бэкенд идёт ПЕРЕД фронтом намеренно. Новый бэкенд шлёт поля, которых
+          # старый фронт не знает, — тот их просто игнорирует. Обратный порядок
+          # ронял страницу в белый экран: фронт ждал поле, которого сервер ещё
+          # не отдавал.
+          #
+          # Скрипт на сервере принадлежит root и лежит вне git-клона; sudo выдан
+          # ровно на него одной строкой в /etc/sudoers.d/tt-hack-api.
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'sudo /usr/local/bin/tt-hack-api-deploy'
+
+      - name: Выложить превью
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: scripts/preview_deploy.sh
 
       - name: Итог
         if: always()
