@@ -258,10 +258,24 @@ printf 'ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-web-deploy\n' \
 visudo -c                                        # синтаксис sudoers до первого деплоя
 
 # Nginx: было root-обслуживание релиза, стало проксирование в контейнер.
-# Правится вручную и точечно: certbot дописал в файл 443-блок и редирект с 80,
-# копировать версию из репозитория поверх нельзя — потеряется TLS.
-# Образец блоков — deploy/nginx/tt-hack-review.conf.
+# Файл — /etc/nginx/sites-available/tt-hack-review.conf, .conf в имени обязателен.
+# Правится вручную и точечно: certbot дописал туда 443-блок и редирект с 80,
+# копировать версию из репозитория поверх нельзя — потеряется TLS. Правки идут
+# в блок с ssl_certificate, а не в тот, что редиректит с 80.
+#
+# Порядок внутри server: ^~ /assets/vibe-debug ВЫШЕ location /, иначе оверлей
+# ревью уйдёт в контейнер, где его нет. Образец — deploy/nginx/tt-hack-review.conf.
+cp /etc/nginx/sites-available/tt-hack-review.conf{,.bak-$(date +%F)}
 nginx -t && systemctl reload nginx
+
+# Проверка после reload. /nonexistent-route обязан дать 200: это SPA-фолбэк из
+# контейнера, старая статика отдавала бы здесь 404 — по нему и видно, что
+# переключение состоялось.
+for p in / /nonexistent-route /assets/vibe-debug.js /api/health; do
+  printf '%-24s ' "$p"
+  curl -sS -o /dev/null -w '%{http_code}\n' -u "$(cat /home/ttdeploy/.preview-smoke-auth)" \
+    "https://tt-hack-review.72.56.16.44.sslip.io$p"
+done
 
 sudo /usr/local/bin/tt-hack-web-deploy           # первая сборка: несколько минут
 curl -sS -o /dev/null -w '%{http_code}\n' localhost:5173/
@@ -309,7 +323,9 @@ chown -h ttdeploy:ttdeploy /opt/tt-hack-preview/current
 
 # 4. Nginx: location / проксирует в контейнер cc-web, а оверлей ревью берётся
 #    из симлинка current. Образец обоих блоков — deploy/nginx/tt-hack-review.conf;
-#    правится вручную, копировать файл поверх нельзя (в нём TLS от certbot).
+#    на сервере это /etc/nginx/sites-available/tt-hack-review.conf — суффикс .conf
+#    обязателен, файла без него нет. Правится вручную, копировать версию из
+#    репозитория поверх нельзя (в серверной TLS от certbot).
 nginx -t && systemctl reload nginx
 
 # 5. Логин:пароль Basic Auth для smoke-check — только на сервере, не в GitHub.
