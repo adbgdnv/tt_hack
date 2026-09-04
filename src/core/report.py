@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from core.charts import ChartSpec, build_charts
-from core.factors import heading, weight
+from core.factors import frequency, heading, weight
 
 # ─────────────────────────── разделы ───────────────────────────
 
@@ -268,7 +268,11 @@ def _collect_factors(record: dict) -> tuple[dict[str, list[Factor]], tuple[str, 
             )
         )
     for factors in by_section.values():
-        factors.sort(key=lambda f: (-f.weight, f.heading))
+        # Тяжесть, затем редкость, затем алфавит. Средний ключ появился потому,
+        # что без него ничья решалась буквой заголовка — у 29 компаний из 117,
+        # и «Массовый адрес» обгонял «Убыток по отчётности» из-за «М». Реже
+        # значит больше сообщает об этой компании, а не о базе.
+        factors.sort(key=lambda f: (-f.weight, frequency(f.code), f.heading))
     return by_section, tuple(unknown)
 
 

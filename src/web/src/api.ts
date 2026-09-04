@@ -202,7 +202,14 @@ function normalizeReport(raw: CounterpartyReport): CounterpartyReport {
   };
 }
 
-export type ChatReply = { answer: string; sections: string[] };
+export type ChatReply = {
+  answer: string;
+  sections: string[];
+  /** Ключи графиков, которые агент решил показать. В потоке это события `chart`. */
+  charts: string[];
+  /** Внешние находки со ссылками. В потоке это событие `sources`. */
+  sources: { title: string; url: string; snippet: string }[];
+};
 
 /**
  * Вопрос о контрагенте.

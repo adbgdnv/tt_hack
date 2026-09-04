@@ -94,6 +94,31 @@ def test_тяжёлый_фактор_поднимает_раздел_выше_л
     assert ключи.index("registries") < ключи.index("activity")
 
 
+def test_при_равной_тяжести_первым_идёт_более_редкий_фактор():
+    """Раньше ничью решала буква заголовка — у 29 компаний из 117.
+
+    «Массовый адрес» (вес 2, у 24 компаний) обгонял «Убыток по отчётности»
+    (вес 2, у 10) только потому, что «М» раньше «У». Оба в разделе «Финансы»
+    и «Реестры» не пересекаются, поэтому берём пару внутри одного раздела:
+    ответчик в арбитраже против исполнительных производств — обоим вес 2,
+    но первый встречается вдвое чаще и потому сообщает о компании меньше.
+    """
+    r = build(
+        запись(
+            reputationalRisks={
+                "negative": [
+                    фактор("arbitrationDefendant", "arbitr", "Ответчик"),
+                    фактор("executionProceedings", "arbitr", "Производства"),
+                ],
+                "positive": [],
+            }
+        )
+    )
+    суды = next(s for s in r.sections if s.key == "courts")
+    коды = [f.code for f in суды.factors]
+    assert коды == ["executionProceedings", "arbitrationDefendant"], коды
+
+
 # ─────────────────────────── разбор источника ───────────────────────────
 
 
@@ -156,12 +181,8 @@ def test_ни_один_внутренний_код_не_попадает_в_пр
 def test_разделы_с_сигналом_всегда_выше_пустых():
     for record in _RECORDS:
         states = [s.state for s in build(record).sections]
-        последний_сигнал = max(
-            (i for i, s in enumerate(states) if s is State.SIGNAL), default=-1
-        )
-        первый_пустой = min(
-            (i for i, s in enumerate(states) if s is State.EMPTY), default=99
-        )
+        последний_сигнал = max((i for i, s in enumerate(states) if s is State.SIGNAL), default=-1)
+        первый_пустой = min((i for i, s in enumerate(states) if s is State.EMPTY), default=99)
         assert последний_сигнал < первый_пустой
 
 

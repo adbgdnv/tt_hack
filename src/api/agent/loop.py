@@ -3,10 +3,19 @@
 Живёт здесь, а не в MCP-сервере: MCP отдаёт возможности, а оркестрацию ведёт клиент.
 В протоколе нет метода «запусти агента», и это не ограничение, а граница ответственности.
 
-Инструментов у модели нет намеренно. Отчёт помещается в контекст целиком — самая
-тяжёлая компания даёт около 740 токенов, — поэтому дотягиваться не за чем.
-А невызванный инструмент это прямой путь к выдумыванию, и «не выдумывает» стоит
-первым в критериях приёмки кейса.
+Путей два, и различает их **только транспорт**. `run_stream` отдаёт события
+по мере работы, `run` — один готовый ответ. Агент под ними один и тот же:
+те же инструменты, тот же контекст, те же правила. Что в потоке приходит
+событиями `chart` и `sources`, здесь возвращается полями ответа — иначе
+программный клиент получил бы внешние сведения без ссылок, а это запрещено
+промптом.
+
+Так было не всегда, и разошлись они молча. У `run` была своя сборка контекста
+(`build_messages` из первого коммита) и ни одного инструмента. Коммит 006 добавил
+в общий `SYSTEM_PROMPT` раздел «Про инструменты» и снял границу «искать вне отчёта
+не умеешь» — но инструменты выдал только потоку. `run` стал сообщать модели, что
+умеет показывать графики и искать снаружи, не имея ни того, ни другого. Тесты
+это пропустили: они проверяли только роли сообщений.
 
 Память — в рамках одной сессии. Кейсодатель: «память нужна именно в рамках одной
 сессии», между сессиями оценка не переносится.
@@ -17,10 +26,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
+from langchain_core.messages import AIMessage, ToolMessage
+
 from api.agent import events, graph, prompt
-from api.agent.prompt import build_messages
 from core.charts import build_charts
-from core.llm import LLMClient
+from core.llm import environment
 from core.report import Report
 
 PROVIDER_DOWN = "Сервис разбора сейчас недоступен. Отчёт выше остаётся полным."
@@ -57,10 +67,18 @@ class Session:
 
 @dataclass(frozen=True)
 class Answer:
-    """Ответ диалога и разделы, на которые он опирается."""
+    """Ответ диалога: текст, обоснование и всё, что добыли инструменты.
+
+    `charts` и `sources` — то же, что в потоке уходит событиями `chart`
+    и `sources`. Без них непотоковый клиент не смог бы ни нарисовать
+    запрошенный график, ни показать ссылку на внешний источник, хотя промпт
+    требует ссылку всегда.
+    """
 
     text: str
     sections: tuple[str, ...] = ()
+    charts: tuple[str, ...] = ()
+    sources: tuple[dict, ...] = ()
 
 
 _SESSIONS: dict[str, Session] = {}
@@ -95,19 +113,84 @@ def _grounding(report: Report, text: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-def run(state: Session, report: Report, question: str, client: LLMClient | None = None) -> Answer:
-    """Прогоняет один шаг диалога и возвращает ответ пользователю."""
+def _trace(report: Report) -> dict:
+    """Настройки вызова агента: предел шагов и метки для записи в LangSmith.
+
+    Метки обязательны. Без `inn` и окружения записи неразличимы — непонятно,
+    о какой компании речь и пришёл ли вызов с сервера или с ноутбука. У непотокового
+    пути они были, пока он ходил через `LLMClient.ask`, и потерялись при переезде
+    на агента; у потокового их не было никогда. Здесь они общие для обоих.
+    """
+    return {
+        "recursion_limit": graph.MAX_STEPS * 2,
+        "run_name": "counterparty-chat",
+        "metadata": {"environment": environment(), "inn": report.inn},
+    }
+
+
+def _harvest(messages: list) -> tuple[str, tuple[str, ...], tuple[dict, ...]]:
+    """Текст ответа и добытое инструментами из готовой переписки агента.
+
+    Разбор тот же, что в `events.Translator`, но по завершённой переписке,
+    а не по кускам потока: там события рождаются по мере работы, здесь всё
+    известно сразу. Итог инструмента с признаком ошибки пропускаем — неудавшийся
+    вызов не должен выглядеть как добытые данные.
+    """
+    text, charts, sources = "", [], []
+    for message in messages:
+        if isinstance(message, ToolMessage):
+            if getattr(message, "status", "success") == "error":
+                continue
+            payload = getattr(message, "artifact", None)
+            if not isinstance(payload, dict):
+                continue
+            if "chart" in payload:
+                charts.append(payload["chart"]["chart"])
+            if "sources" in payload:
+                sources.extend(payload["sources"])
+        elif isinstance(message, AIMessage):
+            # Ответом считаем последнюю реплику модели: до неё идут те, что
+            # только заказывали инструменты, и текста в них нет.
+            text = message.text or text
+    return text.strip(), tuple(charts), tuple(sources)
+
+
+async def run(
+    state: Session,
+    report: Report,
+    record: dict,
+    question: str,
+    tools: list | None = None,
+) -> Answer:
+    """Прогоняет шаг диалога и возвращает готовый ответ целиком.
+
+    Тот же агент, что в потоке, — отличается только доставка. Асинхронный по той
+    же причине, что и `run_stream`: инструменты ходят по сети, а синхронный вызов
+    занимал бы поток из пула Starlette всё время ответа.
+    """
     state.focus(report.inn)
-    messages = build_messages(report, question, state.history)
-    answer = (client or LLMClient()).ask(messages, max_tokens=700, inn=report.inn)
-    text = answer.content.strip()
+    charts = {c.key: c for c in build_charts(record)}
+    agent = graph.build(
+        tools or [], prompt.system_prompt(report, [c.title for c in charts.values()])
+    )
+    result = await agent.ainvoke(
+        {"messages": prompt.conversation(question, state.history)},
+        context=graph.Context(record=record, report=report),
+        config=_trace(report),
+    )
+    text, показанные, найденные = _harvest(result["messages"])
     if not text:
         # У gpt-oss рассуждение приходит отдельным полем и способно съесть весь
         # бюджет, оставив content пустым. Пустой ответ выдавать за содержательный
         # нельзя — это неотличимо от «мне нечего сказать».
         raise RuntimeError("Модель вернула пустой ответ")
     state.remember(question, text)
-    return Answer(text=text, sections=_grounding(report, text))
+    return Answer(
+        text=text,
+        sections=_grounding(report, text),
+        charts=показанные,
+        sources=найденные,
+    )
 
 
 async def run_stream(
@@ -129,8 +212,8 @@ async def run_stream(
     читают они. В промпт запись не попадает — 31 000 токенов на типовой компании
     при лимите провайдера 8 000 в минуту.
 
-    Непотоковый `run` остаётся: его читают MCP-сервер и программные клиенты,
-    поток они не понимают.
+    Непотоковый `run` рядом — для клиентов, которые событий не понимают. Агент
+    у них общий, поэтому расходиться в возможностях им больше нечем.
     """
     state.focus(report.inn)
     charts = {c.key: c for c in build_charts(record)}
@@ -144,7 +227,7 @@ async def run_stream(
             {"messages": prompt.conversation(question, state.history)},
             context=graph.Context(record=record, report=report),
             stream_mode="messages",
-            config={"recursion_limit": graph.MAX_STEPS * 2},
+            config=_trace(report),
         )
         async for chunk, _meta in stream:
             for event in translator.feed(chunk):

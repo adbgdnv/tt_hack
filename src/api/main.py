@@ -124,9 +124,9 @@ def get_counterparty(inn: str) -> dict:
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Тот же диалог, но событиями по мере работы агента.
 
-    Контракт — `specs/006-chat-agent-tools/contracts/stream.md`. Обычный `/chat`
-    остаётся рядом: его читают MCP-сервер и программные клиенты, поток они
-    не понимают.
+    Контракт — `specs/006-chat-agent-tools/contracts/stream.md`. Основной путь
+    продукта: только здесь у модели есть инструменты, потому что только здесь
+    есть куда доставить график.
 
     Сбой отдаётся событием внутри потока, а не кодом ответа: заголовки уже ушли
     к моменту, когда модель отказывает, и уже показанный пользователю текст
@@ -160,11 +160,17 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 
 @app.post("/chat")
-def chat(request: ChatRequest) -> dict:
-    """Диалог о контрагенте. Память — в рамках одной сессии, между сессиями не храним.
+async def chat(request: ChatRequest) -> dict:
+    """Диалог о контрагенте одним ответом, без потока.
 
-    Модель получает тот же отчёт, что видит пользователь: иначе ответ разойдётся
-    с экраном и проверить его будет нельзя.
+    Для клиентов, которые событий не понимают. Агент тот же, что в `/chat/stream`:
+    те же инструменты и тот же контекст, отличается только доставка. То, что там
+    приходит событиями `chart` и `sources`, здесь лежит в полях ответа — иначе
+    внешние сведения пришли бы без ссылок, чего промпт не допускает.
+
+    Память — в рамках одной сессии, между сессиями не храним. Модель получает
+    тот же отчёт, что видит пользователь: иначе ответ разойдётся с экраном
+    и проверить его будет нельзя.
 
     Недоступность провайдера отдаётся как 502, а не как пустой ответ: сбой сервиса
     нельзя выдавать за содержательный ответ о компании.
@@ -174,10 +180,21 @@ def chat(request: ChatRequest) -> dict:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     built = report_view.build(record)
     try:
-        answer = loop.run(loop.session(request.session_id), built, request.message)
+        answer = await loop.run(
+            loop.session(request.session_id),
+            built,
+            record,
+            request.message,
+            agent_tools.build(record, request.inn),
+        )
     except Exception as error:  # noqa: BLE001 — наружу уходит один понятный ответ
         raise HTTPException(
             status_code=502,
             detail="Сервис разбора сейчас недоступен. Отчёт выше остаётся полным.",
         ) from error
-    return {"answer": answer.text, "sections": list(answer.sections)}
+    return {
+        "answer": answer.text,
+        "sections": list(answer.sections),
+        "charts": list(answer.charts),
+        "sources": list(answer.sources),
+    }
