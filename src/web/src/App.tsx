@@ -50,7 +50,6 @@ function AppHeader({ compact, onHome }: { compact?: boolean; onHome?: () => void
     <header className={'app-header' + (compact ? ' app-header--compact' : '')}>
       <Brand onHome={onHome} />
       <span className="app-header__product">Проверка контрагента</span>
-      <span className="app-header__prototype">Прототип</span>
     </header>
   );
 }
@@ -94,8 +93,8 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
           <span className="static-label static-label--hero">Для вашего бизнеса</span>
           <h1>Проверьте контрагента<br />до начала работы</h1>
           <p>
-            Второй взгляд по открытым данным поверх банковского отчёта: что произошло, чем подтверждается
-            и чего два светофора не показывают.
+            Помогаем быстро и эффективно оценить надёжность контрагента: защитите бизнес от штрафов,
+            доначислений налогов и недобросовестных партнёров.
           </p>
           <form className="search" onSubmit={(event) => { event.preventDefault(); onSearch(); }}>
             <div className="search__control">
@@ -136,39 +135,27 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
               </div>
             )}
           </form>
-          <span className="hero__note">Поиск идёт только по подготовленному набору</span>
         </section>
 
-        <div className="home-columns">
-          <section className="history">
-            <div className="section-heading">
-              <div><span className="eyebrow">История</span><h2>Недавние проверки</h2></div>
+        <section className="history">
+          <div className="section-heading">
+            <div><span className="eyebrow">История</span><h2>Недавние проверки</h2></div>
+          </div>
+          {history.length > 0 ? (
+            <div className="history-grid">
+              {history.map((item) => (
+                <button className="history-card" key={item.inn} type="button" onClick={() => onSelect(item.inn)}>
+                  <Status size={20} view="soft" color={riskColor(item.bankRisk)}>{historyRiskLabel(item.bankRisk)}</Status>
+                  <h3>{item.name}</h3>
+                  <p>ИНН {item.inn}</p>
+                  <div><time>{item.dataDate}</time></div>
+                </button>
+              ))}
             </div>
-            {history.length > 0 ? (
-              <div className="history-grid">
-                {history.map((item) => (
-                  <button className="history-card" key={item.inn} type="button" onClick={() => onSelect(item.inn)}>
-                    <Status size={20} view="soft" color={riskColor(item.bankRisk)}>{historyRiskLabel(item.bankRisk)}</Status>
-                    <h3>{item.name}</h3>
-                    <p>ИНН {item.inn}</p>
-                    <div><time>{item.dataDate}</time></div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="history-empty">Здесь появятся ваши последние проверки.</p>
-            )}
-          </section>
-
-          <section className="how-it-works">
-            <span className="eyebrow">Как это работает</span>
-            <div className="how-it-works__steps">
-              <div><b>1</b><span>Собираем отчёт из открытых источников — суды, ФССП, реестры ФНС, финансы</span></div>
-              <div><b>2</b><span>Показываем произошедшее и не шумим тем, чего не было</span></div>
-              <div><b>3</b><span>Ассистент объясняет непонятные термины и показывает пруфы</span></div>
-            </div>
-          </section>
-        </div>
+          ) : (
+            <p className="history-empty">Здесь появятся ваши последние проверки.</p>
+          )}
+        </section>
       </main>
     </>
   );
