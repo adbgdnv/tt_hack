@@ -99,6 +99,8 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    # Выкатывается только собранное. Неудачная сборка сюда не доходит вовсе.
+    needs: build
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -107,6 +109,12 @@ jobs:
         with:
           # для workflow_run — тот же коммит, что прошёл CI; для dispatch — main
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Короткая метка коммита
+        id: tag
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "sha=${SHA:0:7}" >> "$GITHUB_OUTPUT"
 
       - name: Настроить SSH
         run: |
@@ -162,6 +170,8 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TAG: ${{ steps.tag.outputs.sha }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Бэкенд идёт ПЕРЕД фронтом намеренно. Новый бэкенд шлёт поля, которых
           # старый фронт не знает, — тот их просто игнорирует. Обратный порядок
@@ -170,20 +180,26 @@ jobs:
           #
           # Скрипт на сервере принадлежит root и лежит вне git-клона; sudo выдан
           # ровно на него одной строкой в /etc/sudoers.d/tt-hack-api.
-          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'sudo /usr/local/bin/tt-hack-api-deploy'
+          # Токен в реестр уходит через stdin, а вход делает сам скрипт: sudo
+          # у пользователя выкатки выдан ровно на эти два файла, и отдельный
+          # `sudo docker login` был бы отвергнут.
+          printf '%s\n' "${TOKEN}" | ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "sudo GITHUB_ACTOR=${{ github.actor }} /usr/local/bin/tt-hack-api-deploy ${TAG}"
 
       - name: Выкатить фронтенд
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TAG: ${{ steps.tag.outputs.sha }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Фронт собирается контейнером на сервере, а не здесь: образ и есть
-          # артефакт выкладки. Раннер больше не запускает npm — сборка и запуск
-          # в одном месте, и на сервер не приезжает собранная где-то ещё статика.
+          # Образ приезжает готовым из реестра — сервер его только забирает.
+          # Раньше он собирался здесь же, на машине с 894 МБ памяти, и это
+          # клало сервис на пятнадцать минут.
           #
-          # Сломанная сборка сюда не доедет: скрипт собирает образ до подмены
-          # контейнера, а не поднявшийся фронт откатывает на предыдущий образ.
-          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'sudo /usr/local/bin/tt-hack-web-deploy'
+          # Не поднявшийся фронт откатывается скриптом на предыдущий образ.
+          printf '%s\n' "${TOKEN}" | ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "sudo GITHUB_ACTOR=${{ github.actor }} /usr/local/bin/tt-hack-web-deploy ${TAG}"
 
       - name: Выложить статику превью
         env:
@@ -202,7 +218,8 @@ jobs:
             echo "### Deploy preview"
             echo ""
             echo "- Коммит: \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
-            echo "- Фронтенд: образ cc-web собран и запущен на сервере"
+            echo "- Выкачена метка: \`${{ steps.tag.outputs.sha }}\`"
+            echo "- Образы: \`ghcr.io/${{ github.repository }}/{api,web}:${{ steps.tag.outputs.sha }}\`"
             echo "- Результат job: ${{ job.status }}"
             echo ""
             echo "Логи шага «Выложить статику превью» содержат коды smoke-check по каждой странице."

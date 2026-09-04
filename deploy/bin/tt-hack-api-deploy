@@ -7,28 +7,83 @@
 #
 # Разрешение выдано одной строкой в /etc/sudoers.d/tt-hack-api:
 #   ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-api-deploy
+#
+# Образ НЕ собирается здесь — он приезжает готовым из реестра. У этой машины
+# 894 МБ памяти, и сборка её съедала целиком: замерено — нагрузка 27, SSH
+# не доходил до приветствия, страница не открывалась. Собирает раннер.
+#
+# Метка передаётся первым аргументом. Без неё берётся latest — но выкатка
+# обязана передавать метку коммита: latest всегда указывает на новое,
+# и откатиться по нему нельзя.
 set -euo pipefail
 
 REPO=/opt/tt-hack
 LOG_PREFIX="[api-deploy]"
+TAG="${1:-latest}"
+export TAG
 
-echo "${LOG_PREFIX} было: $(git -C "${REPO}" rev-parse --short HEAD)"
+echo "${LOG_PREFIX} метка: ${TAG}"
+
+# Вход в реестр делает сам скрипт, а не вызывающий: у пользователя выкатки
+# sudo выдан ровно на два этих файла, и `sudo docker login` был бы отвергнут.
+# Расширять разрешение ради входа — значит менять узкое право на широкое.
+#
+# Токен приходит через stdin, а не аргументом: аргументы видны в `ps`.
+# Он временный, живёт ровно столько, сколько идёт прогон, поэтому на машине
+# после выхода не остаётся ничего, что можно украсть позже.
+REGISTRY=ghcr.io
+TOKEN=""
+if [ ! -t 0 ]; then
+  read -r TOKEN || true
+fi
+if [ -n "${TOKEN}" ]; then
+  printf '%s' "${TOKEN}" | docker login "${REGISTRY}" -u "${GITHUB_ACTOR:-x}" --password-stdin >/dev/null
+  trap 'docker logout "${REGISTRY}" >/dev/null 2>&1 || true' EXIT
+else
+  echo "${LOG_PREFIX} токен не передан — рассчитываю на уже скачанный образ" >&2
+fi
+
+
+# Клон нужен ради docker-compose.yml и .env, а не ради исходников: код теперь
+# приезжает внутри образа.
 git -C "${REPO}" fetch --quiet origin main
 git -C "${REPO}" reset --hard --quiet origin/main
 chown -R www-data:www-data "${REPO}"
 # .env пишет деплой отдельным шагом — владельца возвращаем ему
 chown ttdeploy:ttdeploy "${REPO}/.env" 2>/dev/null || true
-echo "${LOG_PREFIX} стало: $(git -C "${REPO}" rev-parse --short HEAD)"
 
 cd "${REPO}"
-docker compose up -d --build api
+
+# Точка отката: образ, на котором сервис работает сейчас. Берём до подмены —
+# после неё узнать его будет уже неоткуда.
+PREVIOUS=$(docker inspect cc-api --format '{{.Config.Image}}' 2>/dev/null || echo "")
+
+echo "${LOG_PREFIX} забираю образ"
+if ! docker compose pull api; then
+  echo "${LOG_PREFIX} ОШИБКА: образ не скачался — оставляю работающий" >&2
+  exit 1
+fi
+
+echo "${LOG_PREFIX} подменяю контейнер"
+# --no-build обязателен: без него compose при любой заминке с образом решит
+# собрать его сам, и мы вернёмся ровно к тому, из-за чего всё это затевалось.
+docker compose up -d --no-build api
+
+rollback() {
+  if [ -z "${PREVIOUS}" ]; then
+    echo "${LOG_PREFIX} откатываться не на что — это первая выкатка" >&2
+    return
+  fi
+  echo "${LOG_PREFIX} откат на ${PREVIOUS}" >&2
+  TAG="${PREVIOUS##*:}" docker compose up -d --no-build --force-recreate api >&2
+}
 
 # Пока контейнер не ответит, деплой не считается успешным: молча упавший бэкенд
 # хуже старого работающего.
 for attempt in $(seq 1 20); do
   if curl -fsS --max-time 3 localhost:8000/health >/dev/null 2>&1; then
     COUNT=$(curl -fsS localhost:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["dataset"]["count"])')
-    echo "${LOG_PREFIX}здоров, контрагентов: ${COUNT}"
+    echo "${LOG_PREFIX} здоров, контрагентов: ${COUNT}"
     exit 0
   fi
   sleep 2
@@ -36,4 +91,5 @@ done
 
 echo "${LOG_PREFIX} ОШИБКА: сервис не ответил за 40 секунд" >&2
 docker logs cc-api --tail 30 >&2
+rollback
 exit 1

@@ -1,13 +1,19 @@
 #!/bin/bash
-# Выкатка фронтенда контейнером. Копия для истории; рабочий экземпляр лежит
-# на сервере в /usr/local/bin/ и принадлежит root.
+# Выкатка фронтенда. Копия для истории; рабочий экземпляр лежит на сервере
+# в /usr/local/bin/ и принадлежит root.
 #
 # Почему root-owned и вне git-клона — та же причина, что у tt-hack-api-deploy:
-# скрипт запускается через sudo, и правом на его правку деплой-пользователь получил
-# бы полный root, а не узкое право выкатить фронт.
+# скрипт запускается через sudo, и правом на его правку деплой-пользователь
+# получил бы полный root, а не узкое право выкатить фронт.
 #
 # Разрешение выдано строкой в /etc/sudoers.d/tt-hack-api:
 #   ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-web-deploy
+#
+# Образ НЕ собирается здесь. Раньше собирался, и именно это клало сервис:
+# установка зависимостей и упаковка на машине с 894 МБ памяти доводили нагрузку
+# до 27, SSH переставал отвечать, а отмена выкатки на середине оставила
+# контейнер «созданным, но не запущенным» — сайт лежал, пока его не подняли
+# руками. Теперь собирает раннер, сюда приезжает готовое.
 #
 # Порядок в workflow: окружение → бэкенд → ЭТОТ скрипт. Новый бэкенд шлёт поля,
 # которых старый фронт не знает, — тот их игнорирует. Обратный порядок ронял
@@ -16,58 +22,69 @@ set -euo pipefail
 
 REPO=/opt/tt-hack
 LOG_PREFIX="[web-deploy]"
+TAG="${1:-latest}"
+export TAG
 
-echo "${LOG_PREFIX} было: $(git -C "${REPO}" rev-parse --short HEAD)"
+echo "${LOG_PREFIX} метка: ${TAG}"
+
+# Вход в реестр делает сам скрипт, а не вызывающий: у пользователя выкатки
+# sudo выдан ровно на два этих файла, и `sudo docker login` был бы отвергнут.
+# Расширять разрешение ради входа — значит менять узкое право на широкое.
+#
+# Токен приходит через stdin, а не аргументом: аргументы видны в `ps`.
+# Он временный, живёт ровно столько, сколько идёт прогон, поэтому на машине
+# после выхода не остаётся ничего, что можно украсть позже.
+REGISTRY=ghcr.io
+TOKEN=""
+if [ ! -t 0 ]; then
+  read -r TOKEN || true
+fi
+if [ -n "${TOKEN}" ]; then
+  printf '%s' "${TOKEN}" | docker login "${REGISTRY}" -u "${GITHUB_ACTOR:-x}" --password-stdin >/dev/null
+  trap 'docker logout "${REGISTRY}" >/dev/null 2>&1 || true' EXIT
+else
+  echo "${LOG_PREFIX} токен не передан — рассчитываю на уже скачанный образ" >&2
+fi
+
+
 git -C "${REPO}" fetch --quiet origin main
 git -C "${REPO}" reset --hard --quiet origin/main
 chown -R www-data:www-data "${REPO}"
-# .env пишет деплой отдельным шагом — владельца возвращаем ему
 chown ttdeploy:ttdeploy "${REPO}/.env" 2>/dev/null || true
-echo "${LOG_PREFIX} стало: $(git -C "${REPO}" rev-parse --short HEAD)"
 
 cd "${REPO}"
 
-# Точка отката: текущий рабочий образ. Если его ещё нет (первая выкатка),
-# откатываться будет некуда — это отдельно проверяется ниже.
-HAVE_PREVIOUS=0
-if docker image inspect cc-web:latest >/dev/null 2>&1; then
-  docker image tag cc-web:latest cc-web:previous
-  HAVE_PREVIOUS=1
+# Точка отката — образ, на котором фронт работает сейчас. Берём до подмены.
+PREVIOUS=$(docker inspect cc-web --format '{{.Config.Image}}' 2>/dev/null || echo "")
+
+echo "${LOG_PREFIX} забираю образ"
+if ! docker compose pull web; then
+  echo "${LOG_PREFIX} ОШИБКА: образ не скачался — оставляю работающий" >&2
+  exit 1
 fi
 
-# Возврат на предыдущий образ. Вызывается из любой точки после успешной сборки:
-# с этого момента тег latest указывает на непроверенный образ, и оставлять его
-# так нельзя — следующая выкатка сохранила бы сломанное как точку отката.
 rollback() {
-  if [ "${HAVE_PREVIOUS}" -eq 0 ]; then
+  if [ -z "${PREVIOUS}" ]; then
     echo "${LOG_PREFIX} откатываться не на что — это первая выкатка" >&2
     return
   fi
-  echo "${LOG_PREFIX} откат на предыдущий образ" >&2
-  docker image tag cc-web:previous cc-web:latest
-  # --no-build: поднимаем ровно тот образ, что сейчас под тегом latest,
-  # иначе compose пересобрал бы ту же сломанную версию.
-  docker compose up -d --force-recreate --no-build web >&2
+  echo "${LOG_PREFIX} откат на ${PREVIOUS}" >&2
+  TAG="${PREVIOUS##*:}" docker compose up -d --no-build --force-recreate web >&2
   echo "${LOG_PREFIX} откат выполнен" >&2
 }
 
-# Сборка отдельным шагом от запуска: пока она идёт, наружу продолжает отвечать
-# старый контейнер. Упавшая сборка (ошибка tsc, недоступный npm) не должна
-# ронять работающий фронт — поэтому и выходим здесь, до подмены контейнера.
-# Тег latest при этом остаётся на старом образе: откатывать нечего.
-echo "${LOG_PREFIX} сборка образа"
-docker compose build web
-
-echo "${LOG_PREFIX} запуск контейнера"
-if ! docker compose up -d web; then
+echo "${LOG_PREFIX} подменяю контейнер"
+# --no-build: поднимаем ровно то, что скачали. Без него compose при заминке
+# с образом соберёт его сам — то есть вернёт исходную беду.
+if ! docker compose up -d --no-build web; then
   echo "${LOG_PREFIX} ОШИБКА: контейнер не запустился" >&2
   rollback
   exit 1
 fi
 
-# Пока контейнер не ответит, деплой не считается успешным. Проверяем и статику,
-# и проксирование в бэкенд: контейнер, отдающий index.html без живого /api,
-# показывает пустую страницу — снаружи это выглядит как рабочий фронт.
+# Проверяем и статику, и проксирование в бэкенд: контейнер, отдающий index.html
+# без живого /api, показывает пустую страницу — снаружи это выглядит как рабочий
+# фронт.
 for attempt in $(seq 1 20); do
   if curl -fsS --max-time 3 localhost:5173/ >/dev/null 2>&1 \
      && curl -fsS --max-time 3 localhost:5173/api/health >/dev/null 2>&1; then
