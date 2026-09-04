@@ -125,3 +125,22 @@ class TestSlim:
         raw = len(json.dumps(report, ensure_ascii=False))
         slimmed = len(json.dumps(slim(report), ensure_ascii=False))
         assert slimmed < raw / 2
+
+
+def test_отдаёт_руководителя():
+    """Без этого поля интерфейсу неоткуда взять ФИО, и подсказка поиска
+    подписывала каждую найденную компанию «Недостаточно данных» — при том
+    что по этому же ФИО её и нашли."""
+    report = make_report(
+        foundersInfo={"authPerson": {"name": "СИЛИН АРТЁМ АЛЕКСЕЕВИЧ", "positionName": "ДИРЕКТОР"}}
+    )
+
+    assert slim(report)["руководитель"] == "СИЛИН АРТЁМ АЛЕКСЕЕВИЧ"
+
+
+def test_у_предпринимателя_руководителя_нет():
+    """Не «данных нет», а «такого не бывает»: поле остаётся пустым, и интерфейс
+    сам решает, что показать."""
+    assert slim(make_report(baseInfo={"shortName": "ИП КАЧУРИН М.О.", "inn": "343703064945"}))[
+        "руководитель"
+    ] is None

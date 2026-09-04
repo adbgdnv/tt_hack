@@ -63,20 +63,41 @@ def by_inn(inn: str, path: Path | None = None) -> dict | None:
     return load(path).by_inn_index.get(str(inn).strip())
 
 
+def _fold(value: str) -> str:
+    """Приводит строку к виду, в котором её сравнивают.
+
+    Регистр — потому что ФИО в наборе записаны прописными, а вводят их строчными.
+    Ё — потому что «Силин Артем» и «СИЛИН АРТЁМ» это один человек: в наборе два
+    таких имени и два названия, и без замены поиск по ним молча ничего не находит.
+    """
+    return value.lower().replace("ё", "е")
+
+
 def search(query: str, limit: int = 10, path: Path | None = None) -> list[dict]:
-    """Поиск по части наименования и по ИНН, без учёта регистра.
+    """Поиск по наименованию, ИНН и ФИО руководителя, без учёта регистра.
+
+    ФИО ищется потому, что его обещает поле ввода — «ИНН, название или ФИО
+    руководителя». Раньше не искалось: поиск смотрел только на название и ИНН,
+    и обещание не выполнялось для 150 компаний из 200, у которых руководитель
+    известен. У остальных пятидесяти это ИП, и руководителя у них не бывает —
+    но фамилия стоит в самом названии («ИП АБРАМОВ И.А.»), поэтому по фамилии
+    находятся и они.
 
     Пустой результат — не ошибка: он означает «в наборе таких нет».
     """
-    needle = (query or "").strip().lower()
+    needle = _fold((query or "").strip())
     if not needle:
         return []
     hits = []
     for record in load(path).counterparties:
         base = record.get("baseInfo") or {}
-        name = str(base.get("shortName") or "").lower()
-        inn = str(base.get("inn") or "")
-        if needle in name or needle in inn:
+        person = (record.get("foundersInfo") or {}).get("authPerson") or {}
+        haystack = (
+            _fold(str(base.get("shortName") or "")),
+            str(base.get("inn") or ""),
+            _fold(str(person.get("name") or "")),
+        )
+        if any(needle in field for field in haystack):
             hits.append(record)
             if len(hits) >= limit:
                 break

@@ -118,7 +118,7 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
               <div className="suggestions" role="listbox" aria-label="Подсказки поиска">
                 {suggestions.map((item) => (
                   <button key={item.inn} type="button" role="option" onClick={() => onSelect(item.inn)}>
-                    <span><strong>{item.name}</strong><small>{item.director}</small></span>
+                    <span><strong>{item.name}</strong>{item.director && <small>{item.director}</small>}</span>
                     <em>ИНН {item.inn}</em>
                   </button>
                 ))}

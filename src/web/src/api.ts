@@ -30,6 +30,7 @@ type SlimApiReport = {
   финотчётность?: unknown;
   коэффициенты?: unknown;
   основной_оквэд?: string | null;
+  руководитель?: string | null;
 };
 
 const labels: Record<BlockKey, string> = {
@@ -99,7 +100,10 @@ function adaptApiReport(raw: Counterparty | SlimApiReport): Counterparty {
   const company: Counterparty = {
     name: raw.название || 'Контрагент без названия',
     inn,
-    director: 'Недостаточно данных',
+    // У ИП руководителя не бывает — его фамилия и так стоит в названии.
+    // Подписывать такую подсказку «Недостаточно данных» значит выдавать
+    // устройство формы за пробел в данных.
+    director: raw.руководитель || (legalForm === 'entrepreneur' ? '' : 'Руководитель не указан'),
     legalForm,
     status,
     bankRisk: asRisk(raw.риск_банка),

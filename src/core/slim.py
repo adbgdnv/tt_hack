@@ -86,6 +86,9 @@ def slim(report: dict) -> dict:
         "производств_сумма_активных": round(sum(num(p.get("amount")) for p in active)) or None,
         "финотчётность": unwrap(fin),
         "коэффициенты": unwrap(report.get("coefficient")),
+        # Без этого поля подсказка поиска подписывала каждую компанию
+        # «Недостаточно данных» — при том что по ФИО её же и нашли.
+        "руководитель": ((report.get("foundersInfo") or {}).get("authPerson") or {}).get("name"),
         "основной_оквэд": (
             (report.get("kindsOfActivityInfo") or {}).get("mainKindOfActivity") or {}
         ).get("description"),
