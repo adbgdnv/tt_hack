@@ -17,10 +17,40 @@ import os
 from dataclasses import dataclass, field
 
 import httpx
+from langsmith import get_current_run_tree, traceable
+from langsmith import utils as langsmith_utils
 
 from core.config import load_env
 
 USER_AGENT = "counterparty-checker/0.1"
+
+
+def _environment() -> str:
+    """Откуда сделан вызов. Отдельной переменной не заводим: различие уже выражено
+    префиксом сервиса — на сервере он задан, локально пуст."""
+    return "server" if os.environ.get("API_ROOT_PATH") else "local"
+
+def _report_usage(usage: dict) -> None:
+    """Отдать счётчик токенов трассировке.
+
+    Сам по себе он в неё не попадает: наблюдатель ищет `usage_metadata` в корне
+    результата, а результат у нас — объект `Answer`, и счётчики оказываются на
+    уровень глубже. Без этого записи приходят с нулями, то есть расход по проекту
+    посчитать нельзя.
+
+    Вне трассировки дерева вызовов нет — тогда просто выходим.
+    """
+    tree = get_current_run_tree()
+    if tree is None:
+        return
+    prompt = usage.get("prompt_tokens", 0)
+    completion = usage.get("completion_tokens", 0)
+    tree.metadata["usage_metadata"] = {
+        "input_tokens": prompt,
+        "output_tokens": completion,
+        "total_tokens": usage.get("total_tokens", prompt + completion),
+    }
+
 
 PROVIDERS = {
     "groq": ("https://api.groq.com/openai/v1", "openai/gpt-oss-20b"),
@@ -62,7 +92,32 @@ class LLMClient:
         *,
         max_tokens: int = 1200,
         temperature: float = 0.2,
+        inn: str | None = None,
     ) -> Answer:
+        """Вызов модели, при включённой трассировке — с записью в LangSmith.
+
+        Трассировка не может стать причиной отказа. Поэтому оборачивается только
+        её настройка: если она не удалась, вызов идёт напрямую. Оборачивать сам
+        вызов в try нельзя — упавшую модель это превратило бы в повторный запрос,
+        а пользователь получил бы поведение, которого не просил.
+        """
+        call = self._call
+        if langsmith_utils.tracing_is_enabled():
+            try:
+                call = traceable(
+                    run_type="llm",
+                    name="counterparty-chat",
+                    metadata={
+                        "environment": _environment(),
+                        "inn": inn,
+                        "model": self.model,
+                    },
+                )(self._call)
+            except Exception:  # noqa: BLE001 — наблюдение не ломает продукт
+                call = self._call
+        return call(messages, max_tokens, temperature)
+
+    def _call(self, messages: list[dict], max_tokens: int, temperature: float) -> Answer:
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={
@@ -84,6 +139,7 @@ class LLMClient:
         data = response.json()
         message = data["choices"][0]["message"]
         usage = data.get("usage", {})
+        _report_usage(usage)
         return Answer(
             content=(message.get("content") or "").strip(),
             reasoning=message.get("reasoning") or "",

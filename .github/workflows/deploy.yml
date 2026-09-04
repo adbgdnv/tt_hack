@@ -52,17 +52,28 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
         run: |
           if [ -z "${LLM_API_KEY}" ]; then
             echo "LLM_API_KEY не задан — пропускаю"; exit 0
           fi
           # Ключ уходит через stdin, а не аргументом: аргументы видны в ps на сервере.
           # umask 077 — файл создаётся сразу с правами 600.
+          # Трассировка включается только когда ключ задан: пустой LANGSMITH_TRACING
+          # оставляет её выключенной, и сервис работает как прежде.
+          TRACING_LINES=""
+          if [ -n "${LANGSMITH_API_KEY}" ]; then
+            TRACING_LINES="LANGSMITH_TRACING=true"
+          fi
           printf '%s\n' \
             '# Создаётся деплоем (.github/workflows/deploy.yml). Правки руками затрутся.' \
             'API_ROOT_PATH=/api' \
             "LLM_PROVIDER=${LLM_PROVIDER:-groq}" \
             "LLM_API_KEY=${LLM_API_KEY}" \
+            "${TRACING_LINES}" \
+            "LANGSMITH_API_KEY=${LANGSMITH_API_KEY}" \
+            "LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-counterparty-checker}" \
           | ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'umask 077 && cat > /opt/tt-hack/.env'
           echo "окружение записано в /opt/tt-hack/.env"
           # Контейнер подхватит его при следующем `docker compose up -d api`:

@@ -93,7 +93,7 @@ def run(state: Session, report: Report, question: str, client: LLMClient | None 
     """Прогоняет один шаг диалога и возвращает ответ пользователю."""
     state.focus(report.inn)
     messages = build_messages(report, question, state.history)
-    answer = (client or LLMClient()).ask(messages, max_tokens=700)
+    answer = (client or LLMClient()).ask(messages, max_tokens=700, inn=report.inn)
     text = answer.content.strip()
     if not text:
         # У gpt-oss рассуждение приходит отдельным полем и способно съесть весь
