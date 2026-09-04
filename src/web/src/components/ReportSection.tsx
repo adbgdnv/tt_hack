@@ -104,10 +104,38 @@ function displayValue(value: string | number): string | number {
   return RAW_VALUE_LABEL[value.trim().toUpperCase()] ?? value;
 }
 
+/**
+ * Изменение к прошлому году.
+ *
+ * Ради этой строки всё и затевалось: «Выручка 116 млрд» одинаково выглядит
+ * у растущей компании и у падающей вдвое, а «116 млрд ↓ −38% к 2024» — уже нет.
+ *
+ * Цветом можно красить именно здесь: и у выручки, и у прибыли рост означает
+ * одно и то же. Для величины, где больше не значит лучше, так делать нельзя.
+ */
+function Delta({ fact }: { fact: ReportFact }) {
+  const delta = fact.delta;
+  if (delta === null || delta === undefined) return null;
+
+  const grew = delta > 0;
+  const percent = Math.abs(delta) >= 0.1 ? Math.round(Math.abs(delta) * 100) : (Math.abs(delta) * 100).toFixed(1);
+  return (
+    <span className={`fact-delta fact-delta--${grew ? 'up' : 'down'}`}>
+      <span aria-hidden="true">{grew ? '↑' : '↓'}</span>
+      {grew ? '+' : '−'}{percent}%
+      {fact.delta_note && <span className="fact-delta__note"> {fact.delta_note}</span>}
+    </span>
+  );
+}
+
 function FactValue({ fact }: { fact: ReportFact }) {
   if (fact.kind === 'money' && typeof fact.value === 'number') {
     // minority={1} — суммы приходят в целых рублях, а не в копейках.
     return <Amount value={fact.value} minority={1} currency="RUR" />;
+  }
+  if (fact.kind === 'ratio' && typeof fact.value === 'number') {
+    // Запятая, а не точка: коэффициент читают как число, а не как код.
+    return <span>{fact.value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}</span>;
   }
   return <span>{String(displayValue(fact.value))}</span>;
 }
@@ -143,7 +171,7 @@ function Facts({ facts }: { facts: ReportFact[] }) {
       {facts.map((fact) => (
         <div key={fact.label}>
           <dt>{fact.label}</dt>
-          <dd><FactValue fact={fact} /></dd>
+          <dd><FactValue fact={fact} /><Delta fact={fact} /></dd>
         </div>
       ))}
     </dl>

@@ -63,10 +63,15 @@ CHARTS_NOT_APPLICABLE_NOTE = "У ИП бухгалтерской отчётно�
 
 CHART_SECTIONS: dict[str, str] = {
     "revenue_assets": "finances",
+    "profit_years": "finances",
     "balance": "finances",
+    "asset_mix": "finances",
+    "liability_mix": "finances",
     "plaintiff_defendant": "courts",
+    "case_outcome": "courts",
     "arbitration_years": "courts",
     "proceedings": "enforcement",
+    "proceedings_years": "enforcement",
 }
 
 # У предпринимателей этих сведений не бывает по устройству формы: проверено,
@@ -117,6 +122,13 @@ class Fact:
     label: str
     value: object
     kind: str = "text"
+    # Изменение к предыдущему году долей: 0.16 это +16%. None означает
+    # «сравнивать не с чем», а не «не изменилось».
+    #
+    # Число без сравнения решения не меняет: «выручка 116 млрд» одинаково
+    # выглядит у растущей компании и у падающей вдвое.
+    delta: float | None = None
+    delta_note: str = ""  # «к 2024» — с чем именно сравнили
 
 
 @dataclass(frozen=True)
@@ -196,6 +208,80 @@ def _num(value: object) -> float:
         return 0.0
 
 
+# Коэффициенты источника. Показываем как есть, без толкования: три числа даны,
+# пороги — нет. Раскрасить их в «норма / есть риски», как делают открытые
+# сервисы, значит придумать границу за источник, а отвечаем мы только за то,
+# что в нём сказано. Год в подписи обязателен: у 9 компаний из 47 он не
+# совпадает с годом отчётности, и без него читался бы как год выручки.
+_COEFFICIENTS = (
+    ("sustainability", "Финансовая устойчивость"),
+    ("solvency", "Платёжеспособность"),
+    ("profitability", "Рентабельность"),
+)
+
+
+def _maybe_num(value: object) -> float | None:
+    """Число или None. В отличие от `_num`, отсутствие не превращается в ноль:
+    ноль выручки и отсутствие отчётности — разные утверждения."""
+    if value is None:
+        return None
+    try:
+        return float(str(value).replace(" ", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def _delta(now: float, before: float | None) -> float | None:
+    """Изменение долей от прошлого года.
+
+    От нуля и от убытка не считаем: «прибыль выросла на 300%» при убытке
+    в прошлом году — арифметически верно и по смыслу бессмысленно, а деление
+    на ноль просто невозможно. В таких случаях честнее не показать ничего.
+    """
+    if before is None or before <= 0:
+        return None
+    return (now - before) / before
+
+
+def _coefficient_facts(record: dict) -> list[Fact]:
+    coefficient = record.get("coefficient") or {}
+    year = coefficient.get("year")
+    facts = []
+    for key, label in _COEFFICIENTS:
+        value = _maybe_num(coefficient.get(key))
+        if value is not None:
+            facts.append(Fact(f"{label}, {year}" if year else label, value, "ratio"))
+    return facts
+
+
+def _finance_facts(record: dict) -> tuple[Fact, ...]:
+    """Выручка и прибыль последнего года — с изменением к предыдущему."""
+    years = sorted(
+        (f for f in (record.get("finReports") or []) if (f.get("common") or {}).get("year")),
+        key=lambda f: f["common"]["year"],
+    )
+    if not years:
+        return ()
+    last, previous = years[-1], (years[-2] if len(years) > 1 else None)
+    facts = []
+    for field, label in (("proceeds", "Выручка"), ("profit", "Прибыль")):
+        value = _maybe_num((last.get("common") or {}).get(field))
+        if value is None:
+            continue
+        before = _maybe_num(((previous or {}).get("common") or {}).get(field))
+        change = _delta(value, before)
+        facts.append(
+            Fact(
+                f"{label} за {last['common']['year']}",
+                round(value),
+                "money",
+                delta=change,
+                delta_note=f"к {previous['common']['year']}" if change is not None else "",
+            )
+        )
+    return tuple(facts + _coefficient_facts(record))
+
+
 def _section_facts(record: dict, key: str) -> tuple[Fact, ...]:
     """Числа раздела — то, что пользователь может сверить с исходником."""
     base = record.get("baseInfo") or {}
@@ -226,16 +312,7 @@ def _section_facts(record: dict, key: str) -> tuple[Fact, ...]:
             Fact("Сумма активных", round(sum(_num(p.get("amount")) for p in active)), "money"),
         )
     if key == "finances":
-        reports = record.get("finReports") or []
-        if not reports:
-            return ()
-        common = reports[0].get("common") or {}
-        facts = []
-        if common.get("year") is not None:
-            facts.append(Fact("Последний год", str(common["year"])))
-        if common.get("proceeds") is not None:
-            facts.append(Fact("Выручка", round(_num(common["proceeds"])), "money"))
-        return tuple(facts)
+        return _finance_facts(record)
     if key == "activity":
         main = (record.get("kindsOfActivityInfo") or {}).get("mainKindOfActivity") or {}
         return (Fact("Основной вид", str(main.get("description") or "—")),) if main else ()

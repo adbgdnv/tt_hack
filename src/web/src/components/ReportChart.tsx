@@ -36,6 +36,22 @@ function short(value: number, unit: string): string {
 
 type Seria = Parameters<typeof Chart>[0]['series'][number];
 
+/**
+ * Подпись деления оси — короче числа в списке под графиком.
+ *
+ * На оси важен порядок величины, точное значение стоит строкой ниже. «750.0 млн»
+ * не помещалось в отведённую компонентом ширину и переносилось на две строки,
+ * а верхнее деление вдобавок обрезалось сверху.
+ */
+function axisTick(value: number, unit: string): string {
+  const abs = Math.abs(value);
+  if (unit !== '₽') return String(value);
+  if (abs >= 1e9) return `${(value / 1e9).toFixed(1)} млрд`;
+  if (abs >= 1e6) return `${Math.round(value / 1e6)} млн`;
+  if (abs >= 1e3) return `${Math.round(value / 1e3)} тыс`;
+  return String(Math.round(value));
+}
+
 function seria(
   name: string,
   key: string,
@@ -121,10 +137,13 @@ export function ReportChart({ spec, compact = false }: { spec: ChartSpec; compac
       <div className="report-chart__canvas">
         <Chart
           id={`chart-${spec.key}${compact ? '-compact' : ''}`}
-          // Поля по краям: со скрытой осью значений крайние подписи упирались
-          // в границу полотна и обрезались — «2023» превращался в «23».
+          // Поля задаются через `initMargin`, а не `margin`: компонент считает
+          // `margin` сам из `initMargin` (см. `setComposedChartsMargin`) и наши
+          // значения молча выбрасывал. Из-за этого крайние подписи упирались
+          // в границу полотна: «2023» превращался в «23», «2025» в «20».
+          // Замерено: подпись года выходит за край на 19 пикселей.
           composeChart={{
-            margin: { top: 8, right: compact ? 20 : 8, left: compact ? 20 : 8, bottom: 0 },
+            initMargin: { top: 12, right: 24, left: compact ? 24 : 8, bottom: 0 },
             maxBarSize: 64,
           }}
           // interval 0 — иначе компонент прореживает подписи и год молча пропадает:
@@ -137,7 +156,7 @@ export function ReportChart({ spec, compact = false }: { spec: ChartSpec; compac
             // В карточке ось значений не нужна: числа стоят списком под графиком,
             // а на 430 пикселях ширины подписи вида «2.6 млрд» съедают четверть.
             hide: compact,
-            tickFormatter: (value: number) => short(value, unit),
+            tickFormatter: (value: number) => axisTick(value, unit),
           }}
           // Столбцы подписаны осью, повторять их в легенде незачем. У рядов по
           // годам легенда единственное, что различает показатели.

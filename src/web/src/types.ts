@@ -86,8 +86,14 @@ export type ReportFactor = {
 export type ReportFact = {
   label: string;
   value: string | number;
-  /** 'money' форматируется компонентом дизайн-системы, а не вручную. */
-  kind: 'text' | 'count' | 'money';
+  /** 'money' форматируется компонентом дизайн-системы, а не вручную.
+   *  'ratio' — коэффициент источника, показывается как есть, без толкования. */
+  kind: 'text' | 'count' | 'money' | 'ratio';
+  /** Изменение к предыдущему году долей: 0.16 это +16%.
+   *  Отсутствует, когда сравнивать не с чем — это не то же самое, что «не изменилось». */
+  delta?: number | null;
+  /** С чем сравнили — «к 2024». */
+  delta_note?: string;
 };
 
 export type ReportSectionData = {

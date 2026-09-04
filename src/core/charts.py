@@ -257,7 +257,204 @@ def proceedings(record: dict) -> ChartSpec | None:
     )
 
 
-BUILDERS = (revenue_assets, balance, plaintiff_defendant, arbitration_years, proceedings)
+def profit_years(record: dict) -> ChartSpec | None:
+    """Прибыль по годам. Данные есть у 68 компаний из 200.
+
+    Отдельным графиком, а не второй линией к выручке: прибыль заполнена реже,
+    и линия обрывалась бы у половины компаний — график выглядел бы сломанным
+    там, где он просто неполон. Убыток здесь обычное значение: из 179 значений
+    прибыли 23 отрицательные, и ось обязана уходить ниже нуля.
+    """
+    if _is_entrepreneur(record):
+        return None
+    years = [f for f in _fin_years(record) if (f.get("common") or {}).get("profit") is not None]
+    if len(years) < MIN_POINTS:
+        return None
+    return series_chart(
+        key="profit_years",
+        title="Прибыль по годам",
+        labels=[str(f["common"]["year"]) for f in years],
+        series=[Series("Прибыль", "₽", tuple(_num(f["common"].get("profit")) for f in years))],
+        source="finReports[].common.profit",
+    )
+
+
+def _parts(node: dict | None, fields: list[tuple[str, str]]) -> list[tuple[str, Number]]:
+    """Состав величины: берём только те части, которые в отчёте есть.
+
+    Отсутствующая часть — не ноль. «Запасов нет» и «про запасы не сказано» это
+    разные утверждения, и второе мы сказать не можем, поэтому пропущенное поле
+    просто не попадает на график, а не рисуется нулевым столбцом.
+    """
+    pairs: list[tuple[str, Number]] = []
+    for key, label in fields:
+        value = _num((node or {}).get(key))
+        if value is not None:
+            pairs.append((label, value))
+    # Одна часть — это число, а не состав; всё по нулям — нечего показывать.
+    if len(pairs) < MIN_POINTS or not any(value for _, value in pairs):
+        return []
+    return pairs
+
+
+def asset_mix(record: dict) -> ChartSpec | None:
+    """Из чего состоят оборотные активы. 127 компаний из 200 — лучшее покрытие
+    среди финансовых графиков.
+
+    Состав, а не итог: «оборотные против внеоборотных» заполнено лишь у 49 компаний
+    и вдобавок говорит меньше. Для решения о поставщике важно, где лежат деньги —
+    в запасах на складе, в долгах покупателей или на счету: расплатиться завтра
+    можно только последним.
+    """
+    if _is_entrepreneur(record):
+        return None
+    years = _fin_years(record)
+    if not years:
+        return None
+    pairs = _parts(
+        (years[-1].get("assets") or {}).get("currentAssets"),
+        [("stocks", "Запасы"), ("receivables", "Дебиторка"), ("bankroll", "Деньги")],
+    )
+    if not pairs:
+        return None
+    return snapshot_chart(
+        key="asset_mix",
+        title="Из чего состоят оборотные активы",
+        pairs=pairs,
+        unit="₽",
+        source="finReports[].assets.currentAssets.{stocks,receivables,bankroll}",
+    )
+
+
+def liability_mix(record: dict) -> ChartSpec | None:
+    """Из чего состоят краткосрочные обязательства. 51 компания из 200.
+
+    Долг поставщикам и долг банку гасят по-разному: первый обычно можно
+    передоговорить, второй нет.
+    """
+    if _is_entrepreneur(record):
+        return None
+    years = _fin_years(record)
+    if not years:
+        return None
+    pairs = _parts(
+        (years[-1].get("liabilities") or {}).get("shortTermLiabilities"),
+        [("accountsPayable", "Кредиторка"), ("borrowedFunds", "Заёмные средства")],
+    )
+    if not pairs:
+        return None
+    return snapshot_chart(
+        key="liability_mix",
+        title="Из чего состоят краткосрочные обязательства",
+        pairs=pairs,
+        unit="₽",
+        source="finReports[].liabilities.shortTermLiabilities.{accountsPayable,borrowedFunds}",
+    )
+
+
+# Счётчики дел по статусам. Роль в этом графике не различается намеренно:
+# вопрос «сколько дел ещё не закончено» одинаков для истца и ответчика,
+# а роль показывает соседний график.
+# `defandant` — опечатка в схеме источника, не наша; префиксы счётчиков
+# (pf/pp/pa и df/dp/da) там же заданы по первым буквам роли и статуса.
+_CASE_STATUS = (
+    (
+        "Завершено",
+        ("plaintiffArbitrationFinished", "pfCount"),
+        ("defandantArbitrationFinished", "dfCount"),
+    ),
+    (
+        "Рассматривается",
+        ("plaintiffArbitrationPending", "ppCount"),
+        ("defandantArbitrationPending", "dpCount"),
+    ),
+    (
+        "Обжалуется",
+        ("plaintiffArbitrationAppealed", "paCount"),
+        ("defandantArbitrationAppealed", "daCount"),
+    ),
+)
+
+
+def case_outcome(record: dict) -> ChartSpec | None:
+    """Чем закончились дела. 65 компаний из 200.
+
+    Незакрытое дело и закрытое — разные новости: первое ещё может обернуться
+    взысканием, второе уже нет. Общий счётчик дел этого не различает.
+    """
+    arb = record.get("arbitrationByStatus") or {}
+    pairs: list[tuple[str, Number]] = []
+    for label, (истец, ключ_истца), (ответчик, ключ_ответчика) in _CASE_STATUS:
+        сумма = 0.0
+        for роль, статус, ключ in (
+            ("plaintiffArbitration", истец, ключ_истца),
+            ("defandantArbitration", ответчик, ключ_ответчика),
+        ):
+            блок = ((arb.get(роль) or {}).get(статус)) or {}
+            сумма += _num(блок.get(ключ)) or 0
+        pairs.append((label, сумма))
+
+    # Один непустой статус — это число, а не сравнение: «все восемь дел
+    # завершены» карточка и так говорит счётчиком.
+    if sum(1 for _, value in pairs if value) < MIN_POINTS:
+        return None
+    return snapshot_chart(
+        key="case_outcome",
+        title="Чем закончились дела",
+        pairs=pairs,
+        unit="",
+        source="arbitrationByStatus.*Arbitration.*{Finished,Pending,Appealed}",
+    )
+
+
+# Сколько последних лет показываем. Пятнадцать лет подряд не помещаются в карточку
+# шириной 430 пикселей, а вопрос, ради которого на график смотрят, — «беда свежая
+# или старая» — закрывается последними годами. Усечение названо в источнике,
+# чтобы не выдавать восемь лет за всю историю.
+PROCEEDINGS_YEARS = 8
+
+
+def proceedings_years(record: dict) -> ChartSpec | None:
+    """Когда возбуждались производства. 67 компаний из 200.
+
+    Дюжина производств пятилетней давности и дюжина за последний год — разные
+    компании. Счётчик «активных и завершённых» их не различает.
+    """
+    by_year: dict[str, int] = {}
+    for item in record.get("executionProceedings") or []:
+        year = str(item.get("date") or "")[:4]
+        if year.isdigit():
+            by_year[year] = by_year.get(year, 0) + 1
+    if len(by_year) < MIN_POINTS:
+        return None
+
+    years = sorted(by_year)[-PROCEEDINGS_YEARS:]
+    усечено = len(by_year) > len(years)
+    return series_chart(
+        key="proceedings_years",
+        title="Когда возбуждались производства",
+        labels=years,
+        series=[Series("Производств", "", tuple(by_year[y] for y in years))],
+        source="executionProceedings[].date"
+        + (f" (последние {PROCEEDINGS_YEARS} лет из {len(by_year)})" if усечено else ""),
+    )
+
+
+BUILDERS = (
+    # Порядок определяет, какой график попадёт на карточку раздела: первый
+    # построенный. Внутри раздела сначала динамика, потом состав на сегодня —
+    # «что происходит» важнее, чем «как устроено».
+    revenue_assets,
+    profit_years,
+    balance,
+    asset_mix,
+    liability_mix,
+    plaintiff_defendant,
+    case_outcome,
+    arbitration_years,
+    proceedings,
+    proceedings_years,
+)
 
 
 def build_charts(record: dict) -> tuple[ChartSpec, ...]:
