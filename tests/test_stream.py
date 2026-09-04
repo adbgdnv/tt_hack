@@ -172,3 +172,51 @@ def test_неизвестный_инн_это_отказ_а_не_пустой_п
         )
 
     assert ответ.status_code == 404
+
+
+@нужен_набор
+def test_обычная_ручка_отдаёт_добытое_инструментами(monkeypatch):
+    """`/chat` работает тем же агентом, что и поток, поэтому график и ссылки
+    должны доезжать и до неё — иначе непотоковый клиент получит внешние сведения
+    без ссылок, чего промпт не допускает.
+
+    Ручка была без единого теста, и переезд на агента ловить было нечем.
+    """
+    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
+
+    async def подстава(*_, **__):
+        return loop.Answer(
+            text="Ответ",
+            sections=("courts",),
+            charts=("balance",),
+            sources=({"title": "Т", "url": "https://x", "snippet": ""},),
+        )
+
+    monkeypatch.setattr(loop, "run", подстава)
+
+    with TestClient(app) as client:
+        ответ = client.post("/chat", json={"message": "вопрос", "inn": ОПОРНАЯ, "session_id": "т"})
+
+    assert ответ.status_code == 200
+    assert ответ.json() == {
+        "answer": "Ответ",
+        "sections": ["courts"],
+        "charts": ["balance"],
+        "sources": [{"title": "Т", "url": "https://x", "snippet": ""}],
+    }
+
+
+@нужен_набор
+def test_обычная_ручка_отвечает_502_на_сбой_провайдера(monkeypatch):
+    """Сбой сервиса нельзя выдавать за содержательный ответ о компании."""
+    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
+
+    async def падает(*_, **__):
+        raise RuntimeError("провайдер лёг")
+
+    monkeypatch.setattr(loop, "run", падает)
+
+    with TestClient(app) as client:
+        ответ = client.post("/chat", json={"message": "вопрос", "inn": ОПОРНАЯ, "session_id": "т"})
+
+    assert ответ.status_code == 502

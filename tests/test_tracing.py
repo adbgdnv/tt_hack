@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.llm import Answer, LLMClient, _environment
+from core.llm import Answer, LLMClient, environment
 
 
 @pytest.fixture
@@ -117,6 +117,6 @@ def test_повторы_отключены_у_настоящего_клиент�
 def test_окружение_различается(monkeypatch):
     """На сервере и локально записи должны быть отличимы одна от другой."""
     monkeypatch.delenv("API_ROOT_PATH", raising=False)
-    assert _environment() == "local"
+    assert environment() == "local"
     monkeypatch.setenv("API_ROOT_PATH", "/api")
-    assert _environment() == "server"
+    assert environment() == "server"

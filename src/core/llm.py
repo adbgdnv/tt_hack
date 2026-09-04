@@ -33,7 +33,7 @@ PROVIDERS = {
 }
 
 
-def _environment() -> str:
+def environment() -> str:
     """Откуда сделан вызов. Отдельной переменной не заводим: различие уже выражено
     префиксом сервиса — на сервере он задан, локально пуст."""
     return "server" if os.environ.get("API_ROOT_PATH") else "local"
@@ -81,8 +81,10 @@ class LLMClient:
         `reasoning_effort` у gpt-oss управляет тем, сколько токенов уйдёт
         на рассуждение — а тратятся они из того же бюджета ответа. Замерено:
         при значении по умолчанию рассуждение съедает 431 токен из 700, при `low`
-        — 4. По умолчанию не задаём: непотоковый путь работает и менять его
-        поведение ради чужой задачи незачем.
+        — 4. Здесь не задаём по умолчанию, но оба канала диалога ходят через
+        `graph.build` и передают `low` явно: рассуждение на 431 токен оставляло
+        пустой ответ после вызова инструмента. Значение по умолчанию остаётся
+        для прямых вызовов `ask` в обход агента.
         """
         extra = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
         return ChatOpenAI(
@@ -114,7 +116,7 @@ class LLMClient:
             messages,
             config={
                 "run_name": "counterparty-chat",
-                "metadata": {"environment": _environment(), "inn": inn},
+                "metadata": {"environment": environment(), "inn": inn},
             },
         )
         usage = message.usage_metadata or {}

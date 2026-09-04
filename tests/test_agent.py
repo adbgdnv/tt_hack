@@ -6,23 +6,40 @@
 """
 
 import pytest
+from langchain_core.messages import AIMessage, ToolMessage
 
 from api.agent import loop
-from api.agent.prompt import SYSTEM_PROMPT, build_messages, render_report
-from core.llm import Answer
+from api.agent.prompt import SYSTEM_PROMPT, render_report, system_prompt
 from core.report import build
 
 
-class ФейковаяМодель:
-    """Запоминает, что ей передали, и отвечает заготовкой."""
+class ПодставнойАгент:
+    """Отвечает заготовкой и запоминает, что ему передали.
 
-    def __init__(self, text="Ответ по отчёту"):
+    Подменяет граф целиком, а не модель: после того как непотоковый путь переехал
+    на того же агента, что и поток, точка подмены у обоих одна — `graph.build`.
+    """
+
+    def __init__(self, text="Ответ по отчёту", tool_messages=()):
         self.text = text
+        self.tool_messages = list(tool_messages)
         self.messages = None
 
-    def ask(self, messages, **_):
-        self.messages = messages
-        return Answer(content=self.text)
+    async def ainvoke(self, state, **_):
+        self.messages = state["messages"]
+        return {"messages": [*self.tool_messages, AIMessage(content=self.text)]}
+
+
+@pytest.fixture
+def агент(monkeypatch):
+    """Ставит подставного агента и отдаёт функцию запуска одного шага."""
+
+    def поставить(text="Ответ по отчёту", tool_messages=()):
+        подставной = ПодставнойАгент(text, tool_messages)
+        monkeypatch.setattr(loop.graph, "build", lambda *_, **__: подставной)
+        return подставной
+
+    return поставить
 
 
 def запись(inn="7704310756", name='ООО "ТЕСТ"', **overrides) -> dict:
@@ -54,18 +71,97 @@ def чистые_сессии():
 def test_отчёт_уходит_в_контекст_целиком():
     """Модель должна видеть ровно то, что видит пользователь."""
     report = build(запись())
-    messages = build_messages(report, "Что настораживает?")
-    сплошняком = "\n".join(m["content"] for m in messages)
-    assert SYSTEM_PROMPT in сплошняком
-    assert report.name in сплошняком
+    системная = system_prompt(report, [])
+    assert SYSTEM_PROMPT in системная
+    assert report.name in системная
     for section in report.sections:
-        assert section.title in сплошняком
+        assert section.title in системная
 
 
-def test_в_контексте_нет_инструментов():
-    """Инструменты не даём: невызванный инструмент — путь к выдумыванию."""
-    messages = build_messages(build(запись()), "Вопрос")
-    assert all(m["role"] in {"system", "user", "assistant"} for m in messages)
+async def test_оба_канала_собирают_агента_одинаково(monkeypatch):
+    """Поток и обычная ручка обязаны строить одного и того же агента.
+
+    Держит починку расхождения, из-за которого правка промпта доезжала до одного
+    канала из двух: у `run` была своя сборка контекста и ни одного инструмента,
+    а коммит 006 добавил в общий `SYSTEM_PROMPT` правила про инструменты. Обычная
+    ручка стала обещать то, чего у неё не было, и тесты это пропустили — они
+    проверяли только роли сообщений.
+
+    Сравниваем то, что каждый канал передал в `graph.build`: набор инструментов
+    и системную часть.
+    """
+    записанное = []
+
+    def перехват(tools, system):
+        записанное.append((tools, system))
+        return ПодставнойАгент()
+
+    monkeypatch.setattr(loop.graph, "build", перехват)
+    инструменты = ["инструмент"]
+    отчёт, record = build(запись()), запись()
+
+    await loop.run(loop.Session(session_id="a"), отчёт, record, "Вопрос", инструменты)
+    поток = loop.run_stream(loop.Session(session_id="b"), отчёт, record, "Вопрос", инструменты)
+    [_ async for _ in поток]
+
+    assert len(записанное) == 2
+    assert записанное[0] == записанное[1]
+
+
+async def test_вызов_помечается_для_трассировки(monkeypatch):
+    """Без ИНН и окружения записи в LangSmith неразличимы: непонятно, о какой
+    компании речь и откуда пришёл вызов.
+
+    Метки были у непотокового пути, пока он ходил через `LLMClient.ask`, и
+    потерялись при переезде на агента — тесты этого не заметили, потому что
+    проверяли `ask`, а не цикл.
+    """
+    записанное = {}
+
+    class Запоминающий(ПодставнойАгент):
+        async def ainvoke(self, state, **kwargs):
+            записанное.update(kwargs.get("config") or {})
+            return await super().ainvoke(state, **kwargs)
+
+    monkeypatch.setattr(loop.graph, "build", lambda *_, **__: Запоминающий())
+    отчёт = build(запись(inn="7704310756"))
+    await loop.run(loop.session("s1"), отчёт, запись(), "Вопрос", [])
+
+    assert записанное["run_name"] == "counterparty-chat"
+    assert записанное["metadata"]["inn"] == "7704310756"
+    assert записанное["metadata"]["environment"] in {"local", "server"}
+    # Предел шагов не должен потеряться вместе с добавлением меток
+    assert записанное["recursion_limit"] == loop.graph.MAX_STEPS * 2
+
+
+async def test_добытое_инструментами_возвращается_полями(агент):
+    """В потоке график и ссылки уходят событиями. Здесь событий нет, и без полей
+    клиент получил бы внешние сведения без ссылок — промпт этого не допускает."""
+    итоги = [
+        ToolMessage(content="показан", tool_call_id="1", artifact={"chart": {"chart": "balance"}}),
+        ToolMessage(
+            content="найдено",
+            tool_call_id="2",
+            artifact={"sources": [{"title": "Т", "url": "https://x", "snippet": ""}]},
+        ),
+    ]
+    агент(tool_messages=итоги)
+    ответ = await loop.run(loop.session("s1"), build(запись()), запись(), "Вопрос", [])
+    assert ответ.charts == ("balance",)
+    assert ответ.sources[0]["url"] == "https://x"
+
+
+async def test_неудавшийся_вызов_не_считается_добытым(агент):
+    """Инструмент, вернувший ошибку, не должен выглядеть как показанный график."""
+    сбой = ToolMessage(
+        content="не вышло",
+        tool_call_id="1",
+        status="error",
+        artifact={"chart": {"chart": "balance"}},
+    )
+    агент(tool_messages=[сбой])
+    ответ = await loop.run(loop.session("s1"), build(запись()), запись(), "Вопрос", [])
+    assert ответ.charts == ()
 
 
 def test_отсутствие_оценки_проговаривается_словами():
@@ -85,50 +181,54 @@ def test_у_предпринимателя_разделы_помечены_не�
 # ─────────────────────────── сессия ───────────────────────────
 
 
-def test_история_накапливается():
-    state, report, модель = loop.session("s1"), build(запись()), ФейковаяМодель()
-    loop.run(state, report, "Первый вопрос", модель)
-    loop.run(state, report, "Второй вопрос", модель)
+async def test_история_накапливается(агент):
+    агент()
+    state, report = loop.session("s1"), build(запись())
+    await loop.run(state, report, запись(), "Первый вопрос", [])
+    await loop.run(state, report, запись(), "Второй вопрос", [])
     assert len(state.history) == 4
     assert state.history[0]["content"] == "Первый вопрос"
 
 
-def test_смена_контрагента_сбрасывает_разговор():
+async def test_смена_контрагента_сбрасывает_разговор(агент):
     """Ответы о предыдущей компании в новом контексте вводят в заблуждение."""
-    state, модель = loop.session("s1"), ФейковаяМодель()
-    loop.run(state, build(запись(inn="1111111111")), "Вопрос про первую", модель)
+    агент()
+    state = loop.session("s1")
+    первая, вторая = запись(inn="1111111111"), запись(inn="2222222222")
+    await loop.run(state, build(первая), первая, "Вопрос про первую", [])
     assert state.history
-    loop.run(state, build(запись(inn="2222222222")), "Вопрос про вторую", модель)
+    await loop.run(state, build(вторая), вторая, "Вопрос про вторую", [])
     assert len(state.history) == 2
     assert state.focus_inn == "2222222222"
 
 
-def test_история_ограничена_по_длине():
+async def test_история_ограничена_по_длине(агент):
     """Растущая история съела бы минутную квоту провайдера."""
-    state, report, модель = loop.session("s1"), build(запись()), ФейковаяМодель()
+    агент()
+    state, report = loop.session("s1"), build(запись())
     for i in range(loop.HISTORY_TURNS + 4):
-        loop.run(state, report, f"Вопрос {i}", модель)
+        await loop.run(state, report, запись(), f"Вопрос {i}", [])
     assert len(state.history) <= loop.HISTORY_TURNS * 2
 
 
 # ─────────────────────────── отказ и сбой ───────────────────────────
 
 
-def test_пустой_ответ_модели_это_ошибка_а_не_ответ():
+async def test_пустой_ответ_модели_это_ошибка_а_не_ответ(агент):
     """У gpt-oss рассуждение приходит отдельным полем и способно съесть бюджет,
     оставив content пустым. Выдавать пустоту за ответ нельзя."""
+    агент(text="")
     with pytest.raises(RuntimeError):
-        loop.run(loop.session("s1"), build(запись()), "Вопрос", ФейковаяМодель(""))
+        await loop.run(loop.session("s1"), build(запись()), запись(), "Вопрос", [])
 
 
-def test_обоснование_отмечает_только_названные_разделы():
+async def test_обоснование_отмечает_только_названные_разделы(агент):
     """Придуманное обоснование хуже отсутствующего: выглядит как проверка,
     которой не было."""
-    report = build(запись())
-    модель = ФейковаяМодель("По разделу Суды данных нет.")
-    answer = loop.run(loop.session("s1"), report, "Что по судам?", модель)
-    assert "courts" in answer.sections
-    assert "finances" not in answer.sections
+    агент(text="По разделу Суды данных нет.")
+    ответ = await loop.run(loop.session("s1"), build(запись()), запись(), "Что по судам?", [])
+    assert "courts" in ответ.sections
+    assert "finances" not in ответ.sections
 
 
 def test_промпт_перечисляет_настоящие_разделы():
