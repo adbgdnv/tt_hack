@@ -1,3 +1,6 @@
+import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
+import { TagDesktop } from '@alfalab/core-components-tag/desktop';
+
 import type { ReportSectionData } from '../types';
 import { ReportSection } from './ReportSection';
 
@@ -21,9 +24,15 @@ export function BlockModal({ sections, blockKey, highlighted, onClose, onOpenBlo
 
   return (
     <section className={`section-detail${highlighted ? ' section-detail--highlighted' : ''}`} aria-live="polite">
-      <button className="section-detail__back" type="button" onClick={onClose}>
-        <span aria-hidden="true">←</span> Назад к разделам
-      </button>
+      <ButtonDesktop
+        className="section-detail__back"
+        size={40}
+        view="text"
+        leftAddons={<span aria-hidden="true">←</span>}
+        onClick={onClose}
+      >
+        Назад к разделам
+      </ButtonDesktop>
 
       <ReportSection section={section} mode="detail" />
 
@@ -32,7 +41,11 @@ export function BlockModal({ sections, blockKey, highlighted, onClose, onOpenBlo
         <div>
           {sections
             .filter((item) => item.key !== blockKey)
-            .map((item) => <button key={item.key} type="button" onClick={() => onOpenBlock(item.key)}>{item.title}</button>)}
+            .map((item) => (
+              <TagDesktop key={item.key} size={40} onClick={() => onOpenBlock(item.key)}>
+                {item.title}
+              </TagDesktop>
+            ))}
         </div>
       </nav>
     </section>

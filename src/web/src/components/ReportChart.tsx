@@ -3,35 +3,26 @@ import { Chart } from '@alfalab/core-components-chart';
 import type { ChartSpec } from '../types';
 
 /**
- * Описание графика → разметка.
+ * Описание графика → компонент дизайн-системы.
  *
- * Форм ровно две, и рисуются они по-разному не из вкуса, а по смыслу:
+ * Рисует всё `@alfalab/core-components-chart`: и ряд по годам, и сравнение двух
+ * величин, и в карточке раздела, и в детальном виде. Своей отрисовки здесь нет.
  *
- * - `bars` — две величины рядом (истец/ответчик, капитал/обязательства,
- *   активные/завершённые). Горизонтальные полосы с числом на каждой читаются
- *   без осей и наведения мышью и не ломаются в узкой карточке. Раньше через
- *   библиотеку шли все, кроме «В какой роли судится», — столбиковая диаграмма
- *   ради двух значений давала оси, сетку и легенду вокруг двух чисел.
- * - `lines` — ряд по годам, две серии, максимум четыре года. В детальном виде
- *   это компонент дизайн-системы, в карточке — свои столбики: библиотека внутри
- *   кнопки вешает свои обработчики мыши и стоит куда дороже восьми прямоугольников.
+ * **Ключ серии обязан быть уникальным.** Компонент склеивает серии в одну таблицу
+ * по `properties.dataKey` (см. `hooks/useSettings/utils/setDatas`), и две серии
+ * с общим ключом затирают друг друга. Так и было: «Выручка и активы по годам»
+ * рисовал одну линию вместо двух, причём по шкале активов — выручка молча
+ * пропадала, а подпись оставалась.
  *
- * `compact` — вид для карточки раздела: без источника и с мелкой типографикой.
+ * `compact` — вид для карточки раздела: ниже, без оси значений и без источника.
  * Числа остаются в обоих видах: на печати наведения мышью нет, и график без
  * подписей превращается в картинку без данных.
  */
 
+// Цвета заливки задаются числом, а не токеном: recharts кладёт их в атрибут
+// `fill`, а `var(--negative)` в атрибуте презентации не работает — только
+// в свойстве CSS. Значения соответствуют токенам темы.
 const PALETTE = ['#64788a', '#9a7761', '#8c8f95', '#708775'];
-
-/**
- * Строка, которую честно окрасить тревожным цветом: она означает произошедшее
- * событие, а не долю в составе величины. У «Чем обеспечены активы» такой строки
- * нет — обязательства это устройство баланса, а не происшествие.
- */
-const ACCENT_ROW: Record<string, number> = {
-  plaintiff_defendant: 1, // «Как ответчик»
-  proceedings: 0, // «Активные»
-};
 
 /** Крупные суммы нечитаемы целиком: 279 815 832 000 ₽ на оси не помещается. */
 function short(value: number, unit: string): string {
@@ -43,145 +34,83 @@ function short(value: number, unit: string): string {
   return String(Math.round(value));
 }
 
-function full(value: number, unit: string): string {
-  const formatted = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
-  return unit ? `${formatted} ${unit}` : formatted;
-}
+type Seria = Parameters<typeof Chart>[0]['series'][number];
 
-function Values({ spec }: { spec: ChartSpec }) {
-  return (
-    <dl className="report-chart__values">
-      {spec.series.map((s) => (
-        <div key={s.name}>
-          <dt>{s.name}</dt>
-          <dd>
-            {s.values
-              .map((v, i) => (v === null ? null : `${spec.labels[i]}: ${short(v, s.unit)}`))
-              .filter(Boolean)
-              .join(' · ')}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
+function seria(
+  name: string,
+  key: string,
+  fill: string,
+  kind: 'bar' | 'line',
+  unit: string,
+  data: Seria['data'],
+): Seria {
+  return {
+    chart: kind,
+    icon: 'filledCircle',
+    offset: 0,
+    fill,
+    radius: kind === 'bar' ? { top: 4, bottom: 0 } : undefined,
+    gradient: { gid: key, points: [] },
+    properties: {
+      name,
+      dataKey: key,
+      stroke: fill,
+      fill,
+      strokeWidth: 2,
+      // Без форматтера подсказка показывает «52596000» — число, которое
+      // читают по разрядам вручную и ошибаются на порядок.
+      formatter: (value: number) => short(value, unit),
+    },
+    data,
+  };
 }
 
 /**
- * Две величины рядом. Масштаб берётся по модулю: собственный капитал бывает
- * отрицательным — у 11 компаний из 200, — и это ровно тот случай, ради которого
- * на график и смотрят. Полоса нулевой длины выдала бы его за отсутствие данных.
+ * Сравнение двух величин — одной серией на весь график.
+ *
+ * Серия на столбец дала бы каждому свой цвет, но компонент отводит каждой серии
+ * собственный слот внутри категории: столбцы уезжали из-под своих подписей,
+ * а у пары «есть значение / ноль» единственный столбец вставал между делениями.
+ * Подпись под столбцом важнее оттенка — на сигнальном разделе и без того
+ * красные рамка и бейдж.
  */
-function Bars({ spec }: { spec: ChartSpec }) {
-  const series = spec.series[0];
-  if (!series) return null;
+function barSeries(spec: ChartSpec): Seria[] {
+  const source = spec.series[0];
+  if (!source) return [];
 
-  const unit = series.unit;
-  const values = series.values;
-  const max = Math.max(...values.map((v) => Math.abs(v ?? 0)), 1);
-  const accent = ACCENT_ROW[spec.key];
-
-  return (
-    <div className="role-chart">
-      {spec.labels.map((label, index) => {
-        const value = values[index] ?? 0;
-        // Ноль не бывает тревожным: «Как ответчик — 0 ₽» это отсутствие события,
-        // а не событие. Красным его красить значит пугать пустотой.
-        const alarming = value < 0 || (index === accent && value > 0);
-        const tone = alarming ? ' role-chart__row--accent' : '';
-        return (
-          <div className={`role-chart__row${tone}`} key={label}>
-            <div>
-              <span>{label}</span>
-              <strong>{full(value, unit)}</strong>
-            </div>
-            <span className="role-chart__track" aria-hidden="true">
-              <span
-                style={{
-                  width: `${Math.max((Math.abs(value) / max) * 100, value !== 0 ? 3 : 0)}%`,
-                }}
-              />
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return [
+    seria(
+      source.name,
+      'value',
+      PALETTE[0],
+      'bar',
+      source.unit,
+      spec.labels.map((label, index) => ({ label, value: source.values[index] ?? 0 })),
+    ),
+  ];
 }
 
-/** Ряд по годам в карточке: сгруппированные столбики без осей и библиотеки. */
-function MiniColumns({ spec }: { spec: ChartSpec }) {
-  const numbers = spec.series.flatMap((s) =>
-    s.values.filter((v): v is number => v !== null).map(Math.abs),
-  );
-  const max = Math.max(...numbers, 1);
-
-  return (
-    <div className="mini-columns" aria-hidden="true">
-      {spec.labels.map((label, index) => (
-        <div className="mini-columns__group" key={label}>
-          <div className="mini-columns__bars">
-            {spec.series.map((s, si) => {
-              const value = s.values[index];
-              return (
-                <span
-                  key={s.name}
-                  className="mini-columns__bar"
-                  style={{
-                    // null — год без данных, а не ноль: столбика просто нет.
-                    height: value === null ? 0 : `${Math.max((Math.abs(value) / max) * 100, 4)}%`,
-                    background: PALETTE[si % PALETTE.length],
-                  }}
-                />
-              );
-            })}
-          </div>
-          <span className="mini-columns__label">{label}</span>
-        </div>
-      ))}
-    </div>
+/** Ряд по годам: серия на показатель, ключ на серию. */
+function lineSeries(spec: ChartSpec): Seria[] {
+  return spec.series.map((s, index) =>
+    seria(
+      s.name,
+      `v${index}`,
+      PALETTE[index % PALETTE.length],
+      'line',
+      s.unit,
+      // null — год без данных, а не ноль: точка пропускается, линия рвётся.
+      s.values
+        .map((value, i) => ({ label: spec.labels[i], value: value as number }))
+        .filter((point) => point.value !== null),
+    ),
   );
 }
 
 export function ReportChart({ spec, compact = false }: { spec: ChartSpec; compact?: boolean }) {
+  const bars = spec.form === 'bars';
   const unit = spec.series[0]?.unit ?? '';
-
-  const body =
-    spec.form === 'bars' ? (
-      <Bars spec={spec} />
-    ) : compact ? (
-      <MiniColumns spec={spec} />
-    ) : (
-      <div className="report-chart__canvas">
-        <Chart
-          id={`chart-${spec.key}`}
-          composeChart={{ margin: { top: 8, right: 8, left: 8, bottom: 0 } }}
-          xAxis={{ dataKey: 'label', axisLine: false, type: 'category' }}
-          yAxis={{
-            axisLine: false,
-            type: 'number',
-            tickFormatter: (value: number) => short(value, unit),
-          }}
-          legend={spec.series.length > 1 ? { align: 'left', verticalAlign: 'bottom' } : undefined}
-          series={spec.series.map((s, index) => ({
-            chart: 'line' as const,
-            icon: 'filledCircle' as const,
-            offset: 0,
-            fill: PALETTE[index % PALETTE.length],
-            gradient: { gid: `${spec.key}-${index}`, points: [] },
-            properties: {
-              name: s.name,
-              dataKey: 'value',
-              stroke: PALETTE[index % PALETTE.length],
-              fill: PALETTE[index % PALETTE.length],
-              strokeWidth: 2,
-            },
-            // null остаётся null: год без данных — не ноль, и линия должна прерваться
-            data: s.values.map((value, i) => ({ label: spec.labels[i], value: value as number })),
-          }))}
-          labels={spec.labels}
-        />
-      </div>
-    );
+  const series = bars ? barSeries(spec) : lineSeries(spec);
 
   return (
     <figure
@@ -189,10 +118,50 @@ export function ReportChart({ spec, compact = false }: { spec: ChartSpec; compac
       aria-label={spec.title}
     >
       <figcaption className="report-chart__title">{spec.title}</figcaption>
-      {body}
-      {/* Столбики скрыты от чтения с экрана — числа несёт этот список.
-          Для горизонтальных полос число уже стоит на самой полосе. */}
-      {spec.form === 'lines' && <Values spec={spec} />}
+      <div className="report-chart__canvas">
+        <Chart
+          id={`chart-${spec.key}${compact ? '-compact' : ''}`}
+          // Поля по краям: со скрытой осью значений крайние подписи упирались
+          // в границу полотна и обрезались — «2023» превращался в «23».
+          composeChart={{
+            margin: { top: 8, right: compact ? 20 : 8, left: compact ? 20 : 8, bottom: 0 },
+            maxBarSize: 64,
+          }}
+          // interval 0 — иначе компонент прореживает подписи и год молча пропадает:
+          // на «Выручке и активах» с экрана исчезал 2023-й.
+          xAxis={{ dataKey: 'label', axisLine: false, tickLine: false, type: 'category', interval: 0 }}
+          yAxis={{
+            axisLine: false,
+            tickLine: false,
+            type: 'number',
+            // В карточке ось значений не нужна: числа стоят списком под графиком,
+            // а на 430 пикселях ширины подписи вида «2.6 млрд» съедают четверть.
+            hide: compact,
+            tickFormatter: (value: number) => short(value, unit),
+          }}
+          // Столбцы подписаны осью, повторять их в легенде незачем. У рядов по
+          // годам легенда единственное, что различает показатели.
+          legend={!bars && spec.series.length > 1 ? { align: 'left', verticalAlign: 'bottom' } : undefined}
+          tooltip={{ arrow: true, filterNull: true }}
+          series={series}
+          labels={[...spec.labels]}
+        />
+      </div>
+      {/* Значения текстом: на печати наведения мышью нет, а в карточке ось
+          значений скрыта — без этого списка график остаётся без чисел. */}
+      <dl className="report-chart__values">
+        {spec.series.map((s) => (
+          <div key={s.name}>
+            <dt>{s.name}</dt>
+            <dd>
+              {s.values
+                .map((v, i) => (v === null ? null : `${spec.labels[i]}: ${short(v, s.unit)}`))
+                .filter(Boolean)
+                .join(' · ')}
+            </dd>
+          </div>
+        ))}
+      </dl>
       {!compact && <p className="report-chart__source">Источник: {spec.source}</p>}
     </figure>
   );

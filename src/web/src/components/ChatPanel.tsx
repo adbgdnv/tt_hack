@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { IconButtonDesktop } from '@alfalab/core-components-icon-button/desktop';
+import { TagDesktop } from '@alfalab/core-components-tag/desktop';
+import { Typography } from '@alfalab/core-components-typography';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
 import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
 
@@ -61,19 +64,33 @@ function AnswerFeedback({ value, onChange }: {
   return (
     <div className="answer-feedback">
       <span>Ответ помог?</span>
-      <button type="button" aria-label="Ответ помог" aria-pressed={value?.value === 'up'} onClick={() => onChange({ value: 'up' })}>👍</button>
-      <button type="button" aria-label="Ответ не помог" aria-pressed={value?.value === 'down'} onClick={() => onChange({ value: 'down' })}>👎</button>
+      <TagDesktop
+        size={32}
+        checked={value?.value === 'up'}
+        aria-label="Ответ помог"
+        onClick={() => onChange({ value: 'up' })}
+      >
+        👍
+      </TagDesktop>
+      <TagDesktop
+        size={32}
+        checked={value?.value === 'down'}
+        aria-label="Ответ не помог"
+        onClick={() => onChange({ value: 'down' })}
+      >
+        👎
+      </TagDesktop>
       {value?.value === 'down' && (
         <div className="answer-feedback__reasons" aria-label="Причина отрицательной оценки">
           {FEEDBACK_REASONS.map((reason) => (
-            <button
+            <TagDesktop
               key={reason}
-              type="button"
-              aria-pressed={value.reason === reason}
+              size={32}
+              checked={value.reason === reason}
               onClick={() => onChange({ value: 'down', reason })}
             >
               {reason}
-            </button>
+            </TagDesktop>
           ))}
         </div>
       )}
@@ -249,7 +266,12 @@ export function ChatPanel({ report, onToast }: {
       <header className="chat-header">
         <div>
           <span className="ai-mark">AI</span>
-          <div><h2>Чат по отчёту</h2><small>Задайте вопрос своими словами</small></div>
+          <div>
+            <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">
+              Чат по отчёту
+            </Typography.Title>
+            <small>Задайте вопрос своими словами</small>
+          </div>
         </div>
       </header>
 
@@ -340,9 +362,17 @@ export function ChatPanel({ report, onToast }: {
       <div className="chat-suggestions" aria-label="Предложенные вопросы">
         {messages.length === 0 && <span>С чего начать</span>}
         {questions.map((question) => (
-          <button key={question} type="button" disabled={busy} onClick={() => void ask(question)}>
+          <ButtonDesktop
+            key={question}
+            className="chat-suggestions__item"
+            size={40}
+            view="secondary"
+            block
+            disabled={busy}
+            onClick={() => void ask(question)}
+          >
             {question}
-          </button>
+          </ButtonDesktop>
         ))}
       </div>
 

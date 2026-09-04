@@ -1,3 +1,4 @@
+import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { useState } from 'react';
 
 type Answer = 'yes' | 'partial' | 'no';
@@ -21,9 +22,9 @@ export function CompletionBar({ onAnswer }: { onAnswer: (value: Answer) => void 
       <span>{answered ? 'Спасибо — это поможет доработать сервис' : 'Хватило информации для следующего шага?'}</span>
       {!answered && (
         <div className="completion-bar__options">
-          <button type="button" onClick={() => pick('yes')}>Да</button>
-          <button type="button" onClick={() => pick('partial')}>Частично</button>
-          <button type="button" onClick={() => pick('no')}>Нет</button>
+          <ButtonDesktop size={40} view="secondary" onClick={() => pick('yes')}>Да</ButtonDesktop>
+          <ButtonDesktop size={40} view="secondary" onClick={() => pick('partial')}>Частично</ButtonDesktop>
+          <ButtonDesktop size={40} view="secondary" onClick={() => pick('no')}>Нет</ButtonDesktop>
         </div>
       )}
     </div>

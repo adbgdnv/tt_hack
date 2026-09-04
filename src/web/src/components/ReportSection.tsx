@@ -1,6 +1,9 @@
 import { Amount } from '@alfalab/core-components-amount';
+import { Divider } from '@alfalab/core-components-divider';
 import { Indicator } from '@alfalab/core-components-indicator';
+import { List } from '@alfalab/core-components-list';
 import { Status } from '@alfalab/core-components-status';
+import { Typography } from '@alfalab/core-components-typography';
 
 import { ReportChart } from './ReportChart';
 import type { ReportFact, ReportSectionData, SectionState } from '../types';
@@ -179,7 +182,7 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
       <header className="report-section__head">
         <div className="report-section__title">
           <Indicator size={8} backgroundColor={DOT_COLOR[section.state]} />
-          <h3>{section.title}</h3>
+          <Typography.Title tag="h3" view="xsmall" font="styrene" weight="bold">{section.title}</Typography.Title>
         </div>
         <Status size={20} view="soft" color={STATE_COLOR[section.state]}>
           {STATE_LABEL[section.state]}
@@ -209,16 +212,24 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
           строк, а сигналов там от силы четыре. */}
       {!preview && passed.length > 0 && (
         <div className="report-section__passed">
-          <h4>Пройденные проверки</h4>
-          <ul>
+          <Divider />
+          <Typography.Text tag="p" view="secondary-medium" weight="bold">
+            Пройденные проверки
+          </Typography.Text>
+          <List tag="ul" marker="✓" colorMarker="positive">
             {passed.map((label) => (
-              <li key={label}>{label}</li>
+              <List.Item key={label}>{label}</List.Item>
             ))}
-          </ul>
+          </List>
         </div>
       )}
 
-      {preview && charts[0] && <ReportChart spec={charts[0]} compact />}
+      {preview && charts[0] && (
+        <>
+          <Divider className="report-section__divider" />
+          <ReportChart spec={charts[0]} compact />
+        </>
+      )}
       {!preview && charts.map((chart) => <ReportChart key={chart.key} spec={chart} />)}
       {!preview && section.charts_note && (
         <p className="report-section__chart-note">{section.charts_note}</p>

@@ -1,3 +1,6 @@
+import { Link } from '@alfalab/core-components-link';
+import { Typography } from '@alfalab/core-components-typography';
+
 import type { Verdict } from '../verdict';
 
 const LEVEL_CLASS: Record<Verdict['level'], string> = {
@@ -17,7 +20,7 @@ export function VerdictBanner({ verdict, onOpenSection }: {
   return (
     <section className={`verdict ${LEVEL_CLASS[verdict.level]}`}>
       <div className="verdict__head">
-        <h2>{verdict.label}</h2>
+        <Typography.Title tag="h2" view="small" font="styrene" weight="bold">{verdict.label}</Typography.Title>
         {verdict.checksNote && <span className="verdict__checks">{verdict.checksNote}</span>}
       </div>
 
@@ -28,7 +31,13 @@ export function VerdictBanner({ verdict, onOpenSection }: {
               <span className="verdict__dot" aria-hidden="true" />
               <span>
                 {bullet.text}{' '}
-                <button type="button" onClick={() => onOpenSection(bullet.sectionKey)}>{bullet.sectionTitle} →</button>
+                <Link
+                  Component="button"
+                  view="default"
+                  onClick={() => onOpenSection(bullet.sectionKey)}
+                >
+                  {bullet.sectionTitle} →
+                </Link>
               </span>
             </li>
           ))}

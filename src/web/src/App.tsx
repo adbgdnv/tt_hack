@@ -6,6 +6,7 @@ import { Skeleton } from '@alfalab/core-components-skeleton';
 import { Status } from '@alfalab/core-components-status';
 import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop';
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
+import { Typography } from '@alfalab/core-components-typography';
 import { DocumentPdfMIcon } from '@alfalab/icons-glyph/DocumentPdfMIcon';
 import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
 import { getCounterparty, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
@@ -91,7 +92,9 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
       <main className="home page">
         <section className="hero">
           <span className="static-label static-label--hero">Для вашего бизнеса</span>
-          <h1>Проверьте контрагента<br />до начала работы</h1>
+          <Typography.Title tag="h1" className="hero__title" view="xlarge" font="styrene" weight="bold">
+            Проверьте контрагента<br />до начала работы
+          </Typography.Title>
           <p>
             Помогаем быстро и эффективно оценить надёжность контрагента: защитите бизнес от штрафов,
             доначислений налогов и недобросовестных партнёров.
@@ -139,14 +142,18 @@ function HomeScreen({ query, setQuery, suggestions, searching, notFound, loadFai
 
         <section className="history">
           <div className="section-heading">
-            <div><h2>Недавние проверки</h2></div>
+            <div>
+              <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">
+                Недавние проверки
+              </Typography.Title>
+            </div>
           </div>
           {history.length > 0 ? (
             <div className="history-grid">
               {history.map((item) => (
                 <button className="history-card" key={item.inn} type="button" onClick={() => onSelect(item.inn)}>
                   <Status size={20} view="soft" color={riskColor(item.bankRisk)}>{historyRiskLabel(item.bankRisk)}</Status>
-                  <h3>{item.name}</h3>
+                  <Typography.Title tag="h3" view="xsmall" font="styrene" weight="bold">{item.name}</Typography.Title>
                   <p>ИНН {item.inn}</p>
                   <div><time>{item.dataDate}</time></div>
                 </button>
@@ -224,14 +231,22 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
       <main className="page dashboard-page">
         <div className="dashboard-layout">
           <section className="dashboard-main">
-            <button className="back-link" type="button" onClick={onHome}>← Новый поиск</button>
+            <ButtonDesktop
+              className="back-link"
+              size={40}
+              view="text"
+              leftAddons={<span aria-hidden="true">←</span>}
+              onClick={onHome}
+            >
+              Новый поиск
+            </ButtonDesktop>
             <section className="company-header">
               <div className="company-header__identity">
                 <div className="company-status-row">
                   <span className="static-label">{company.status}</span>
                   <span>ИНН {company.inn}</span>
                 </div>
-                <h1>{company.name}</h1>
+                <Typography.Title tag="h1" view="medium" font="styrene" weight="bold">{company.name}</Typography.Title>
                 {dataDate && <p>Данные на {dataDate}</p>}
                 {contactFacts.length > 0 && (
                   <dl className="company-header__contacts">
@@ -284,7 +299,7 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
 
                   <div className="blocks-heading">
                     <div>
-                      <h2>Разделы проверки</h2>
+                      <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">Разделы проверки</Typography.Title>
                     </div>
                     <TooltipDesktop content="Порядок разделов постоянный. Недостаток данных не означает отсутствие рисков">
                       <span className="indicator-legend">Как читать разделы</span>

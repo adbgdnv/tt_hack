@@ -199,10 +199,14 @@ input:focus-visible,
   background: var(--red);
 }
 
-.hero h1 {
+/* Единственное место, где мы сознательно выходим за шкалу Typography: её
+   максимум — 48px, а здесь нужен 60. Заголовок главной — единственное, что
+   должно останавливать взгляд на этом экране, и на 48px он перестаёт им быть.
+   Селектор усилен намеренно: компонент навешивает две своих класса разом
+   (`typography__xlarge` + `typography__font`), и одиночный `.hero h1` ему
+   проигрывает. */
+.hero .hero__title.hero__title {
   margin: 12px 0 12px;
-  /* 60px против прежних 48: заголовок — единственное, что должно
-     останавливать взгляд на этом экране. */
   font-size: 60px;
   line-height: 1.04;
   letter-spacing: -0.035em;
@@ -352,7 +356,6 @@ input:focus-visible,
 
 .history-card h3 {
   margin: 14px 0 6px;
-  font-size: 15px;
 }
 
 .history-card p {
@@ -401,10 +404,9 @@ input:focus-visible,
   font-size: 13px;
 }
 
+/* Размер и начертание — из Typography; здесь остаются только отступы. */
 .company-header h1 {
   margin: 12px 0 6px;
-  font-size: 28px;
-  letter-spacing: -0.02em;
 }
 
 .company-header__identity > p {
@@ -530,8 +532,6 @@ input:focus-visible,
 
 .verdict__head h2 {
   margin: 0;
-  font-size: 22px;
-  letter-spacing: -0.02em;
 }
 
 .verdict__hint {
@@ -630,8 +630,6 @@ input:focus-visible,
 
 .blocks-heading h2 {
   margin: 6px 0 0;
-  font-size: 20px;
-  letter-spacing: -0.01em;
 }
 
 .indicator-legend {
@@ -724,8 +722,6 @@ button.report-section:hover {
 
 .report-section__title h3 {
   margin: 0;
-  font-size: 16px;
-  line-height: 22px;
 }
 
 .report-section__description {
@@ -814,40 +810,15 @@ button.report-section:hover {
    а смысл несёт сам факт списка. */
 .report-section__passed {
   margin: 14px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
 }
 
-.report-section__passed h4 {
+.report-section__passed > p {
+  margin-top: 14px;
+}
+
+.report-section__passed p {
   margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
   color: var(--ink-secondary);
-}
-
-.report-section__passed ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-
-.report-section__passed li {
-  position: relative;
-  padding-left: 22px;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--ink-secondary);
-}
-
-.report-section__passed li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  top: 0;
-  color: var(--positive);
-  font-weight: 600;
 }
 
 .report-section__chart-note {
@@ -1027,7 +998,6 @@ button.report-section:hover {
 
 .chat-header h2 {
   margin: 0;
-  font-size: 15px;
 }
 
 .chat-memory {
@@ -1106,25 +1076,22 @@ button.report-section:hover {
   font-size: 11px;
 }
 
-.chat-suggestions button {
+/* Рамку, скругление, наведение и заблокированное состояние даёт сама кнопка
+   (`view="outlined"`). Здесь остаётся только то, чего у неё нет: подсказка —
+   это предложение целиком, а не подпись на кнопке, и в две строки она не
+   помещается в фиксированную высоту размера 40. */
+.chat-suggestions__item {
+  height: auto;
+  min-height: 40px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.chat-suggestions__item,
+.chat-suggestions__item > span {
+  justify-content: flex-start;
   text-align: left;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: transparent;
-  color: var(--ink);
-  font-size: 12px;
-  line-height: 1.35;
-  cursor: pointer;
-}
-
-.chat-suggestions button:hover {
-  border-color: var(--ink-tertiary);
-}
-
-.chat-suggestions button:disabled {
-  opacity: 0.5;
-  cursor: default;
+  white-space: normal;
 }
 
 .progress-card {
@@ -1358,66 +1325,8 @@ button.report-section:hover {
   height: 180px;
 }
 
-.role-chart {
-  display: grid;
-  gap: 10px;
-}
-
-.role-chart__row > div {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.role-chart__track {
-  display: block;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--inset);
-  overflow: hidden;
-}
-
-.role-chart__track > span {
-  display: block;
-  height: 100%;
-  background: #64788a;
-  border-radius: 4px;
-}
-
-/* Красным — только строка произошедшего: суммы к компании как к ответчику,
-   действующие производства, отрицательный собственный капитал. Раньше красными
-   были все полосы подряд, включая обязательства в балансе, — цвет тревоги
-   стоял там, где тревоги нет, и переставал что-либо значить. */
-.role-chart__row--accent .role-chart__track > span {
-  background: var(--negative);
-}
-
-.role-chart__row--accent strong {
-  color: var(--negative);
-}
-
-/* Значения текстом: на печати нет наведения мышью, и график без подписей
-   превращается в картинку без чисел. */
-.report-chart__values {
-  margin: 6px 0 0;
-  display: grid;
-  gap: 2px;
-  font-size: 12px;
-}
-
-.report-chart__values > div {
-  display: flex;
-  gap: 8px;
-}
-
-.report-chart__values dt {
-  color: var(--ink-secondary);
-  white-space: nowrap;
-}
-
-.report-chart__values dd {
-  margin: 0;
+.report-chart--compact .report-chart__canvas {
+  height: 120px;
 }
 
 .report-chart__source {
@@ -1428,10 +1337,13 @@ button.report-section:hover {
 
 /* ── График в карточке раздела ── */
 
+/* Разделитель рисует Divider — здесь только расстояние до него. */
+.report-section__divider {
+  margin-top: 12px;
+}
+
 .report-chart--compact {
-  margin: 10px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  margin: 12px 0 0;
 }
 
 .report-chart--compact .report-chart__title {
@@ -1441,54 +1353,7 @@ button.report-section:hover {
   margin-bottom: 8px;
 }
 
-.report-chart--compact .role-chart {
-  gap: 8px;
-}
-
-.report-chart--compact .role-chart__row > div {
-  font-size: 12px;
-  margin-bottom: 3px;
-}
-
 .report-chart--compact .report-chart__values {
   font-size: 11px;
 }
 
-/* Ряд по годам в карточке. Своя разметка вместо библиотеки: восемь
-   прямоугольников не стоят обработчиков мыши внутри кнопки. */
-.mini-columns {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  height: 68px;
-}
-
-.mini-columns__group {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 5px;
-  height: 100%;
-  min-width: 0;
-}
-
-.mini-columns__bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 100%;
-}
-
-.mini-columns__bar {
-  flex: 1 1 0;
-  min-width: 4px;
-  border-radius: 2px 2px 0 0;
-}
-
-.mini-columns__label {
-  font-size: 11px;
-  color: var(--ink-tertiary);
-  text-align: center;
-  white-space: nowrap;
-}
