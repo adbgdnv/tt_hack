@@ -32,6 +32,13 @@ function FactValue({ fact }: { fact: ReportFact }) {
 
 export function ReportSection({ section }: { section: ReportSectionData }) {
   const muted = section.state === 'empty' || section.state === 'not_applicable';
+  // Фронт выкатывается автоматически при пуше, бэкенд — вручную. Значит расхождение
+  // версий это обычное состояние между деплоями, а не редкий случай: сервер постарше
+  // просто не пришлёт поля, которых у него ещё нет. Пропущенное поле должно
+  // деградировать до пустого списка, а не ронять страницу в белый экран.
+  const factors = section.factors ?? [];
+  const facts = section.facts ?? [];
+  const charts = section.charts ?? [];
   return (
     <section className={muted ? 'report-section report-section--muted' : 'report-section'}>
       <header className="report-section__head">
@@ -44,9 +51,9 @@ export function ReportSection({ section }: { section: ReportSectionData }) {
       {/* Формулировка состояния приходит с сервера готовой — придумывать не надо */}
       <p className="report-section__note">{section.note}</p>
 
-      {section.factors.length > 0 && (
+      {factors.length > 0 && (
         <ul className="report-section__factors">
-          {section.factors.map((factor) => (
+          {factors.map((factor) => (
             <li key={factor.code}>
               <strong>{factor.heading}</strong>
               {/* Текст из выгрузки кейсодателя, дословно */}
@@ -58,7 +65,7 @@ export function ReportSection({ section }: { section: ReportSectionData }) {
 
       {/* Графики приходят готовыми: сервер уже решил, хватает ли данных.
           Пустых рамок здесь быть не может по контракту. */}
-      {section.charts.map((chart) => (
+      {charts.map((chart) => (
         <ReportChart key={chart.key} spec={chart} />
       ))}
 
@@ -66,9 +73,9 @@ export function ReportSection({ section }: { section: ReportSectionData }) {
           Объяснение приходит с сервера готовым. */}
       {section.charts_note && <p className="report-section__chart-note">{section.charts_note}</p>}
 
-      {section.facts.length > 0 && (
+      {facts.length > 0 && (
         <dl className="report-section__facts">
-          {section.facts.map((fact) => (
+          {facts.map((fact) => (
             <div key={fact.label}>
               <dt>{fact.label}</dt>
               <dd><FactValue fact={fact} /></dd>

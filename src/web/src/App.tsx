@@ -299,7 +299,7 @@ function Dashboard({ company, report, onHome, onOpenBlock, chatContext, onToast,
 
             <div className="report-sections">
               {report
-                ? report.sections.map((section) => <ReportSection key={section.key} section={section} />)
+                ? (report.sections ?? []).map((section) => <ReportSection key={section.key} section={section} />)
                 : blockOrder.map((key) => <RiskBlockCard key={key} block={company.blocks[key]} onOpen={() => onOpenBlock(key)} />)}
             </div>
           </section>

@@ -175,7 +175,31 @@ export async function getReport(inn: string): Promise<CounterpartyReport | undef
   const response = await fetch(`${apiBase}/counterparties/${encodeURIComponent(inn)}/report`);
   if (response.status === 404) return undefined;
   if (!response.ok) throw new Error('Не удалось загрузить отчёт');
-  return (await response.json()) as CounterpartyReport;
+  return normalizeReport(await response.json());
+}
+
+/**
+ * Достраивает поля, которых сервер мог не прислать.
+ *
+ * Фронт выкатывается автоматически при каждом пуше, бэкенд обновляется вручную —
+ * значит расхождение версий это обычное состояние между деплоями, а не редкий
+ * случай. Сервер постарше просто не знает о полях, появившихся позже.
+ *
+ * Защищаемся здесь, на границе, а не в каждом месте использования: иначе одно
+ * забытое обращение снова уронит страницу в белый экран, как уже случилось
+ * с графиками.
+ */
+function normalizeReport(raw: CounterpartyReport): CounterpartyReport {
+  return {
+    ...raw,
+    sections: (raw.sections ?? []).map((section) => ({
+      ...section,
+      factors: section.factors ?? [],
+      facts: section.facts ?? [],
+      charts: section.charts ?? [],
+      charts_note: section.charts_note ?? '',
+    })),
+  };
 }
 
 export type ChatReply = { answer: string; sections: string[] };
