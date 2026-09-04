@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from core.charts import ChartSpec, build_charts
 from core.factors import heading, weight
 
 # ─────────────────────────── разделы ───────────────────────────
@@ -46,6 +47,16 @@ CHAPTER_TO_SECTION: dict[str, str] = {
 # схемы фиксируется. В данных уже есть один такой — у фактора в `chapter`
 # лежит его собственный код.
 FALLBACK_SECTION = "registries"
+
+# График принадлежит разделу и наследует его порядок: раздел с сигналом стоит выше,
+# и его график виден раньше. Отдельного правила приоритета графиков не нужно.
+CHART_SECTIONS: dict[str, str] = {
+    "revenue_assets": "finances",
+    "balance": "finances",
+    "plaintiff_defendant": "courts",
+    "arbitration_years": "courts",
+    "proceedings": "enforcement",
+}
 
 # У предпринимателей этих сведений не бывает по устройству формы: проверено,
 # что у всех пятидесяти отсутствуют и отчётность, и учредители.
@@ -105,6 +116,7 @@ class Section:
     note: str
     factors: tuple[Factor, ...] = ()
     facts: tuple[Fact, ...] = ()
+    charts: tuple[ChartSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -262,6 +274,10 @@ def build(record: dict) -> Report:
     entrepreneur = _is_entrepreneur(record)
     by_section, unknown = _collect_factors(record)
 
+    by_chart_section: dict[str, list[ChartSpec]] = {key: [] for key in SECTION_TITLES}
+    for chart in build_charts(record):
+        by_chart_section[CHART_SECTIONS[chart.key]].append(chart)
+
     sections = []
     for key, title in SECTION_TITLES.items():
         factors = by_section[key]
@@ -275,6 +291,11 @@ def build(record: dict) -> Report:
                 note=STATE_NOTES[state],
                 factors=tuple(factors),
                 facts=facts if state is not State.NOT_APPLICABLE else (),
+                # Неприменимый раздел графиков не содержит по определению:
+                # данных для них не бывает.
+                charts=(
+                    tuple(by_chart_section[key]) if state is not State.NOT_APPLICABLE else ()
+                ),
             )
         )
 

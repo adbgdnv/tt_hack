@@ -99,6 +99,8 @@ export type ReportSectionData = {
   factors: ReportFactor[];
   /** То, что пользователь может сверить с источником. */
   facts: ReportFact[];
+  /** Графики раздела. Пустой список означает, что данных на график не хватило. */
+  charts: ChartSpec[];
 };
 
 export type RiskAssessment = {
@@ -123,4 +125,25 @@ export type CounterpartyReport = {
   unknown_chapters: string[];
   signals: number;
   unknowns: number;
+};
+
+// ─────────── Описания графиков: приходят с сервера вместе с отчётом ───────────
+// Описание говорит, что показать. Чем рисовать — забота интерфейса.
+
+export type ChartSeries = {
+  name: string;
+  unit: string;
+  /** Соответствуют подписям оси один к одному. null — год без данных, а не ноль. */
+  values: Array<number | null>;
+};
+
+export type ChartSpec = {
+  key: string;
+  title: string;
+  /** 'lines' — ряд по годам, 'bars' — сравнение величин. */
+  form: 'lines' | 'bars';
+  labels: string[];
+  series: ChartSeries[];
+  /** Поля отчёта, из которых построено — пользователь может проверить цифру. */
+  source: string;
 };

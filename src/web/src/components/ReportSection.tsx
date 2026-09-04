@@ -1,6 +1,7 @@
 import { Amount } from '@alfalab/core-components-amount';
 import { Status } from '@alfalab/core-components-status';
 
+import { ReportChart } from './ReportChart';
 import type { ReportFact, ReportSectionData, SectionState } from '../types';
 
 /**
@@ -54,6 +55,12 @@ export function ReportSection({ section }: { section: ReportSectionData }) {
           ))}
         </ul>
       )}
+
+      {/* Графики приходят готовыми: сервер уже решил, хватает ли данных.
+          Пустых рамок здесь быть не может по контракту. */}
+      {section.charts.map((chart) => (
+        <ReportChart key={chart.key} spec={chart} />
+      ))}
 
       {section.facts.length > 0 && (
         <dl className="report-section__facts">

@@ -1382,3 +1382,48 @@ input:focus-visible,
   gap: 8px;
   padding: 10px 14px 14px;
 }
+
+/* ─────────── Графики ─────────── */
+
+.report-chart {
+  margin: 12px 0;
+}
+
+.report-chart__title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.report-chart__canvas {
+  height: 180px;
+}
+
+/* Значения текстом: на печати нет наведения мышью, и график без подписей
+   превращается в картинку без чисел. */
+.report-chart__values {
+  margin: 6px 0 0;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.report-chart__values > div {
+  display: flex;
+  gap: 8px;
+}
+
+.report-chart__values dt {
+  color: var(--color-light-text-secondary, #6b6b6b);
+  white-space: nowrap;
+}
+
+.report-chart__values dd {
+  margin: 0;
+}
+
+.report-chart__source {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-light-text-tertiary, #8d8d93);
+}
