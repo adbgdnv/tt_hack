@@ -70,12 +70,27 @@ rollback() {
   TAG="${PREVIOUS##*:}" docker compose up -d --no-build --force-recreate api >&2
 }
 
+# Старые образы этого сервиса. Каждая выкатка приносит новый — за неделю
+# ежедневных выкаток это несколько гигабайт на диске, которого 14 ГБ.
+# Оставляем два: работающий и предыдущий, на который откатываемся. Остальные
+# при нужде забираются из реестра, там хранится десять.
+#
+# Идёт ПОСЛЕ проверки здоровья: пока не убедились, что новый образ работает,
+# удалять старые нельзя.
+prune_old_images() {
+  local repo="$1"
+  docker images "${repo}" --format '{{.ID}} {{.CreatedAt}}' \
+    | sort -k2 -r | tail -n +3 | awk '{print $1}' \
+    | xargs -r docker rmi >/dev/null 2>&1 || true
+}
+
 # Пока контейнер не ответит, деплой не считается успешным: молча упавший бэкенд
 # хуже старого работающего.
 for attempt in $(seq 1 20); do
   if curl -fsS --max-time 3 localhost:8000/health >/dev/null 2>&1; then
     COUNT=$(curl -fsS localhost:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["dataset"]["count"])')
     echo "${LOG_PREFIX} здоров, контрагентов: ${COUNT}"
+    prune_old_images "ghcr.io/adbgdnv/tt_hack/api"
     exit 0
   fi
   sleep 2

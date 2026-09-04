@@ -74,6 +74,20 @@ if ! docker compose up -d --no-build web; then
   exit 1
 fi
 
+# Старые образы этого сервиса. Каждая выкатка приносит новый — за неделю
+# ежедневных выкаток это несколько гигабайт на диске, которого 14 ГБ.
+# Оставляем два: работающий и предыдущий, на который откатываемся. Остальные
+# при нужде забираются из реестра, там хранится десять.
+#
+# Идёт ПОСЛЕ проверки здоровья: пока не убедились, что новый образ работает,
+# удалять старые нельзя.
+prune_old_images() {
+  local repo="$1"
+  docker images "${repo}" --format '{{.ID}} {{.CreatedAt}}' \
+    | sort -k2 -r | tail -n +3 | awk '{print $1}' \
+    | xargs -r docker rmi >/dev/null 2>&1 || true
+}
+
 # Проверяем и статику, и проксирование в бэкенд: контейнер, отдающий index.html
 # без живого /api, показывает пустую страницу — снаружи это выглядит как рабочий
 # фронт.
@@ -81,6 +95,7 @@ for attempt in $(seq 1 20); do
   if curl -fsS --max-time 3 localhost:5173/ >/dev/null 2>&1 \
      && curl -fsS --max-time 3 localhost:5173/api/health >/dev/null 2>&1; then
     echo "${LOG_PREFIX} здоров: статика и /api отвечают"
+    prune_old_images "ghcr.io/adbgdnv/tt_hack/web"
     exit 0
   fi
   sleep 2
