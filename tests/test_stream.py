@@ -12,10 +12,34 @@ from langchain_core.messages import ToolMessage
 
 from api.agent import events, loop
 from api.main import app
-from core import repo
+from core.repo import load
 from core.report import build
 
+# Приложение читает подготовленный набор при старте — без него оно не поднимается
+# намеренно: пустой набор выглядел бы как «у всех компаний ничего нет». В репозиторий
+# набор не коммитится, поэтому тесты ручки пропускаются там, где его нет.
+try:
+    _ЕСТЬ_НАБОР = bool(load().counterparties)
+except RuntimeError:
+    _ЕСТЬ_НАБОР = False
+
+нужен_набор = pytest.mark.skipif(not _ЕСТЬ_НАБОР, reason="набор не собран")
+
 ОПОРНАЯ = "5032257375"
+
+# Своя запись, а не из набора: набор в репозиторий не коммитится, и тест,
+# требующий его, в CI не запустился бы.
+ЗАПИСЬ = {
+    "baseInfo": {
+        "inn": ОПОРНАЯ,
+        "shortName": 'ООО "МАКСМАРКЕТ"',
+        "riskLevel": "LOW",
+        "registrationInfo": {"yearsFromRegistration": 9},
+    },
+    "status": {"status": "CURRENT"},
+    "zskRiskLevel": "GREEN",
+    "reputationalRisks": {"negative": [], "positive": []},
+}
 
 
 def кусок(текст):
@@ -38,14 +62,9 @@ class ПодставнойАгент:
         return поток()
 
 
-@pytest.fixture
-def запись():
-    return repo.by_inn(ОПОРНАЯ)
-
-
 async def прогнать(monkeypatch, агент, сессия=None):
     monkeypatch.setattr(loop.graph, "build", lambda *_, **__: агент)
-    запись = repo.by_inn(ОПОРНАЯ)
+    запись = ЗАПИСЬ
     отчёт = build(запись)
     состояние = сессия or loop.Session(session_id="т")
     поток = loop.run_stream(состояние, отчёт, запись, "Сколько производств?")
@@ -120,7 +139,10 @@ async def test_вызов_инструмента_доходит_до_событ�
     assert [с.name for с in события] == ["tool_start", "chart", "tool_end", "token", "done"]
 
 
+@нужен_набор
 def test_ручка_отдаёт_поток(monkeypatch):
+    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
+
     async def подстава(*_, **__):
         yield events.Event("token", {"text": "привет"})
         yield events.Event("done", {"sections": []})
@@ -140,8 +162,10 @@ def test_ручка_отдаёт_поток(monkeypatch):
     assert ответ.text.rstrip().endswith('data: {"sections": []}')
 
 
-def test_неизвестный_инн_это_отказ_а_не_пустой_поток():
+@нужен_набор
+def test_неизвестный_инн_это_отказ_а_не_пустой_поток(monkeypatch):
     """Пустой поток неотличим от «у компании всё чисто»."""
+    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
     with TestClient(app) as client:
         ответ = client.post(
             "/chat/stream", json={"message": "вопрос", "inn": "0000000000", "session_id": "т"}

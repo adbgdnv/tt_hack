@@ -7,14 +7,33 @@
 import pytest
 
 from api.agent import search, tools
-from core import repo
 
-ОПОРНАЯ = "5032257375"  # ООО «МАКСМАРКЕТ»: есть четыре графика из пяти
+ОПОРНАЯ = "5032257375"
+
+# Числа настоящие — из ООО «МАКСМАРКЕТ», опорной компании кейса. Сама запись
+# собрана вручную: подготовленный набор в репозиторий не коммитится (в нём ФИО
+# учредителей), и тесты, требующие его, в CI не запустились бы вовсе.
+ЗАПИСЬ = {
+    "baseInfo": {"inn": ОПОРНАЯ, "shortName": 'ООО "МАКСМАРКЕТ"'},
+    "arbitrationCases": [
+        {"year": 2023, "plaintiffAmount": 5832755, "defendantAmount": 0},
+        {"year": 2024, "plaintiffAmount": 382176765, "defendantAmount": 2589790444},
+    ],
+    "finReports": [
+        {
+            "common": {"year": 2023},
+            "liabilities": {"capitals": 365129000, "totalLiabilities": 279450703000},
+        }
+    ],
+}
+
+# Компания без единого графика — таких 22 из 200.
+ПУСТАЯ = {"baseInfo": {"inn": "0", "shortName": 'ООО "ПУСТО"'}}
 
 
 @pytest.fixture
 def запись():
-    return repo.by_inn(ОПОРНАЯ)
+    return ЗАПИСЬ
 
 
 def test_результат_несёт_числа_графика(запись):
@@ -59,10 +78,7 @@ def test_выдуманный_вид_не_рисуется(запись):
 
 def test_компания_без_графиков_получает_честный_отказ():
     """Таких 22 из 200. Пустое полотно хуже отказа: оно выглядит как ответ."""
-    без_графиков = next(
-        z for z in repo.all() if not list(__import__("core.charts", fromlist=["x"]).build_charts(z))
-    )
-    текст, добавка = tools.chart_result(без_графиков, "0", "balance")
+    текст, добавка = tools.chart_result(ПУСТАЯ, "0", "balance")
 
     assert "ни одного" in текст
     assert добавка == {}
