@@ -32,6 +32,14 @@ jobs:
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          # Keepalive, иначе выкатка фронта рвётся на `npm ci`: он молчит минутами,
+          # и соединение прибивают по бездействию (client_loop: send disconnect:
+          # Broken pipe, exit 255) — при том что сборка на сервере продолжается,
+          # и деплой падает на живой сборке. 30 с × 20 = 10 минут тишины терпим.
+          # В ~/.ssh/config, а не флагами у каждого вызова: так же настроены rsync
+          # и ssh внутри preview_deploy.sh.
+          printf 'Host *\n  ServerAliveInterval 30\n  ServerAliveCountMax 20\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Прокинуть окружение бэкенда
         env:
