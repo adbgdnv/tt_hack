@@ -68,7 +68,11 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5173/"]
+      # Адрес именно 127.0.0.1, не localhost. В образе localhost резолвится
+      # только в ::1, а nginx слушает IPv4 — проверка отвечала «connection
+      # refused» на исправном контейнере, помечала его нездоровым и валила
+      # выкатку, хотя страница отдавалась.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173/"]
       interval: 10s
       timeout: 5s
       retries: 5
