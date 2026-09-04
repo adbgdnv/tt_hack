@@ -109,16 +109,19 @@ def test_без_ключа_поиск_модели_не_предлагается
     assert имена == ["show_chart"]
 
 
-def test_с_ключом_поиск_появляется(monkeypatch, запись):
+def test_с_ключом_появляются_поиск_и_чтение(monkeypatch, запись):
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-тестовый")
 
     имена = [t.name for t in tools.build(запись, ОПОРНАЯ)]
 
-    assert имена == ["show_chart", "web_search"]
+    assert имена == ["show_chart", "web_search", "fetch_page"]
 
 
-def test_инструментов_ровно_два(monkeypatch, запись):
-    """Каждый инструмент стоит токенов на каждом вызове модели. Список закрыт."""
+def test_список_инструментов_закрыт(monkeypatch, запись):
+    """Каждый инструмент стоит токенов на каждом вызове модели при квоте
+    8 000 в минуту. Три — сознательный потолок, а не текущее состояние."""
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-тестовый")
-    assert len(tools.build(запись, ОПОРНАЯ)) == 2
+    assert len(tools.build(запись, ОПОРНАЯ)) == 3
     assert search.MAX_RESULTS == 3
+    # Потолок на страницу: без него их сервер отдаёт 14 645 токенов на страницу
+    assert search.PAGE_CHARS <= 4000

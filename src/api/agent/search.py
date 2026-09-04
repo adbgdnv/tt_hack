@@ -24,14 +24,19 @@ import os
 from langchain_core.tools import tool
 
 MCP_URL = "https://mcp.tavily.com/mcp/?tavilyApiKey={key}"
-REMOTE_TOOL = "tavily_search"
 
 # Сколько находок доводим до модели. Бюджет токенов общий с ответом: один
 # неурезанный ответ поиска — около 570 токенов.
 MAX_RESULTS = 3
 SNIPPET = 300
 
-_remote = None  # загруженный инструмент их сервера; грузится один раз
+# Потолок на страницу. Замерено на живом ключе: страница целиком — 14 645 токенов
+# при минутной квоте провайдера 8 000, то есть один вызов превышал бы весь бюджет
+# минуты вдвое. С параметром `query` их сервер отдаёт только относящуюся к делу
+# часть — около 1 200 токенов. Потолок оставлен на случай, когда не отдаёт.
+PAGE_CHARS = 4000
+
+_remote: dict = {}  # инструменты их сервера; грузятся один раз
 
 
 def enabled() -> bool:
@@ -39,32 +44,61 @@ def enabled() -> bool:
     return bool(os.environ.get("TAVILY_API_KEY"))
 
 
-async def _load():
-    """Забирает нужный инструмент с сервера поставщика.
+async def _tool(name: str):
+    """Инструмент их сервера по имени.
 
-    Из пяти доступных берём один. Остальные четыре — обход сайтов, карта ссылок,
-    извлечение страниц, глубокое исследование — стоили бы 1493 токена схем
-    на каждом вызове модели и продукту не нужны.
+    Из пяти доступных берём два: поиск и извлечение страницы. Остальные —
+    обход сайта, карта ссылок, глубокое исследование — продукту не нужны,
+    а их описания стоили бы токенов на каждом вызове модели.
+
+    Описания не устаревают, поэтому грузим один раз на процесс.
     """
-    from langchain_mcp_adapters.client import MultiServerMCPClient
+    if name not in _remote:
+        from langchain_mcp_adapters.client import MultiServerMCPClient
 
-    url = MCP_URL.format(key=os.environ["TAVILY_API_KEY"])
-    client = MultiServerMCPClient({"tavily": {"transport": "streamable_http", "url": url}})
-    remote = await client.get_tools()
-    return next(t for t in remote if t.name == REMOTE_TOOL)
+        url = MCP_URL.format(key=os.environ["TAVILY_API_KEY"])
+        client = MultiServerMCPClient({"tavily": {"transport": "streamable_http", "url": url}})
+        _remote.update({t.name: t for t in await client.get_tools()})
+    return _remote[name]
 
 
 async def _search(query: str) -> list[dict]:
-    """Вызов чужого MCP.
+    """Поиск через чужой MCP.
 
     Сессия поднимается на вызов: поиск случается редко, а живая сессия к чужому
-    серверу потребовала бы присмотра за переподключением ради ничего. Сам
-    инструмент грузится один раз — это описание, оно не устаревает.
+    серверу потребовала бы присмотра за переподключением ради ничего.
     """
-    global _remote
-    if _remote is None:
-        _remote = await _load()
-    return _shape(await _remote.ainvoke({"query": query}))
+    tool = await _tool("tavily_search")
+    return _shape(await tool.ainvoke({"query": query}))
+
+
+async def _fetch(url: str, question: str) -> str:
+    """Содержимое страницы, относящееся к вопросу.
+
+    `query` обязателен и держит размер: без него их сервер отдаёт страницу
+    целиком — 14 645 токенов на проверенной странице, вдвое больше всей минутной
+    квоты провайдера. С ним — около 1 200.
+    """
+    tool = await _tool("tavily_extract")
+    payload = await tool.ainvoke({"urls": [url], "query": question, "format": "text"})
+    return _page_text(payload)
+
+
+def _page_text(payload) -> str:
+    """Текст страницы из ответа их сервера.
+
+    Ответ приходит блоками, внутри — JSON со служебными полями. Разворачиваем
+    здесь: обёртка стоит токенов и мешает модели читать, а нужен из неё один ключ.
+    """
+    if isinstance(payload, list):
+        payload = "".join(b.get("text", "") for b in payload if isinstance(b, dict))
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return payload  # не JSON — значит уже текст
+    results = (payload or {}).get("results") or []
+    return "\n\n".join(str(r.get("raw_content") or "") for r in results).strip()
 
 
 def _shape(payload) -> list[dict]:
@@ -116,6 +150,32 @@ async def web_search(query: str) -> tuple[str, dict]:
     )
 
 
+@tool(response_format="content_and_artifact")
+async def fetch_page(url: str, question: str) -> tuple[str, dict]:
+    """Прочитать страницу по ссылке из результатов поиска.
+
+    Зови, когда выдержки из поиска не хватает, чтобы ответить, и только по ссылке,
+    которую поиск уже вернул. `question` — что именно ищем на странице: по нему
+    со страницы берётся относящаяся к делу часть, иначе она не поместится.
+
+    Прочитанное — такой же внешний источник: отчётом оно не подтверждено, ссылку
+    в ответе указывай.
+    """
+    try:
+        content = await _fetch(url, question)
+    except Exception:  # noqa: BLE001 — внешняя система по сети
+        return "Страницу прочитать не удалось. Отвечай по отчёту и тому, что уже нашёл.", {}
+    if not content.strip():
+        return "Страница пустая или недоступна.", {}
+    # Потолок здесь, а не в транспорте: это продуктовое правило, и оно должно
+    # держаться при любой реализации доступа к странице.
+    return (
+        "Содержимое страницы по вопросу. Это внешний источник, не отчёт: "
+        f"что совпадает с отчётом — подтверждает его.\n{content[:PAGE_CHARS]}",
+        {"sources": [{"title": url, "url": url, "snippet": ""}]},
+    )
+
+
 def tools() -> list:
-    """Инструмент поиска, если он настроен. Иначе пустой список."""
-    return [web_search] if enabled() else []
+    """Инструменты поиска, если он настроен. Иначе пустой список."""
+    return [web_search, fetch_page] if enabled() else []

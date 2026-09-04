@@ -30,6 +30,7 @@ from core.charts import ChartSpec
 TOOL_TITLES = {
     "show_chart": "Строю график",
     "web_search": "Ищу во внешних источниках",
+    "fetch_page": "Читаю страницу",
 }
 
 
@@ -62,8 +63,11 @@ def tool_title(tool: str, arguments: str, charts: dict[str, ChartSpec]) -> str:
     spec = charts.get(kind) if kind else None
     if spec is not None:
         return f"{base} «{spec.title}»"
-    query = parsed.get("query")
-    return f"{base}: {query}" if query else base
+    for поле in ("query", "url"):
+        значение = parsed.get(поле)
+        if значение:
+            return f"{base}: {значение}"
+    return base
 
 
 class Translator:

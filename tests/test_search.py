@@ -130,3 +130,83 @@ def test_без_ключа_инструмент_не_создаётся(monkeypa
 
     assert search.enabled() is False
     assert search.tools() == []
+
+
+# ─────────────────────────── чтение страницы ───────────────────────────
+
+
+async def прочитать(ссылка, вопрос):
+    сообщение = await search.fetch_page.ainvoke(
+        {
+            "name": "fetch_page",
+            "args": {"url": ссылка, "question": вопрос},
+            "id": "1",
+            "type": "tool_call",
+        }
+    )
+    return сообщение.content, сообщение.artifact
+
+
+async def test_страница_урезается_по_потолку(monkeypatch):
+    """Замерено на живом ключе: страница целиком — 14 645 токенов при минутной
+    квоте провайдера 8 000. Один вызов превышал бы весь бюджет минуты вдвое."""
+
+    async def длинная(*_):
+        return "х" * 100_000
+
+    monkeypatch.setattr(search, "_fetch", длинная)
+
+    текст, _ = await прочитать("https://x", "банкротство")
+
+    assert len(текст) < search.PAGE_CHARS + 500  # плюс сопроводительная фраза
+
+
+async def test_прочитанное_помечено_внешним(monkeypatch):
+    async def страница(*_):
+        return "в процессе банкротства"
+
+    monkeypatch.setattr(search, "_fetch", страница)
+
+    текст, добавка = await прочитать("https://focus.kontur.ru/x", "банкротство")
+
+    assert "внешний источник" in текст
+    assert "подтверждает" in текст  # совпадение с отчётом — не новое сведение
+    assert добавка["sources"][0]["url"] == "https://focus.kontur.ru/x"
+
+
+async def test_недоступная_страница_не_роняет_ответ(monkeypatch):
+    async def упасть(*_):
+        raise TimeoutError("страница не отвечает")
+
+    monkeypatch.setattr(search, "_fetch", упасть)
+
+    текст, добавка = await прочитать("https://x", "что угодно")
+
+    assert "не удалось" in текст
+    assert "по отчёту" in текст
+    assert добавка == {}
+
+
+async def test_пустая_страница_это_ответ(monkeypatch):
+    async def пусто(*_):
+        return "   "
+
+    monkeypatch.setattr(search, "_fetch", пусто)
+
+    текст, добавка = await прочитать("https://x", "что угодно")
+
+    assert "пустая" in текст
+    assert добавка == {}
+
+
+def test_текст_страницы_разворачивается_из_обёртки():
+    """Ответ их сервера — блоки, внутри JSON со служебными полями. Обёртка стоит
+    токенов и мешает модели: нужен из неё один ключ."""
+    выдача = {"results": [{"url": "https://x", "raw_content": "судебных дел нет"}]}
+    блоки = [{"type": "text", "text": json.dumps(выдача)}]
+
+    assert search._page_text(блоки) == "судебных дел нет"
+
+
+def test_не_json_считается_готовым_текстом():
+    assert search._page_text("просто текст") == "просто текст"
