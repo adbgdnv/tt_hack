@@ -1,56 +1,31 @@
 """Клиент LLM-провайдера. OpenAI-совместимый, поэтому смена провайдера —
 это смена LLM_BASE_URL и ключа, без единой правки кода.
 
-Два подводных камня, проверенных на живом API:
+Работаем через `ChatOpenAI` из LangChain, а не через голый HTTP. Причина одна:
+трассировка. Наблюдение встроено в клиент LangChain и включается наличием ключа —
+ни декораторов, ни ручного перекладывания счётчиков. Своя реализация на httpx
+требовала и того, и другого, причём токены приходили нулями, пока их не начали
+класть в запись вручную.
 
-1. Без заголовка User-Agent Cloudflare перед Groq отдаёт 403. curl подставляет свой
-   автоматически, поэтому из терминала работает, а из Python — нет.
-2. gpt-oss возвращает поле `reasoning` рядом с `content`. Пользователю его не
-   показываем, но в бюджет токенов закладываем: при max_tokens=20 рассуждение съедает
-   весь лимит и content приходит пустым.
+Побочная выгода: рассуждение gpt-oss попадает в запись отдельной строкой
+(`output_token_details.reasoning`) — при разборе пустых ответов видно, съело ли
+его рассуждение.
+
+Подводный камень, проверенный на живом API: без заголовка User-Agent Cloudflare
+перед Groq отдаёт 403. curl подставляет свой автоматически, поэтому из терминала
+работает, а из Python — нет.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, field
 
-import httpx
-from langsmith import get_current_run_tree, traceable
-from langsmith import utils as langsmith_utils
+from langchain_openai import ChatOpenAI
 
 from core.config import load_env
 
 USER_AGENT = "counterparty-checker/0.1"
-
-
-def _environment() -> str:
-    """Откуда сделан вызов. Отдельной переменной не заводим: различие уже выражено
-    префиксом сервиса — на сервере он задан, локально пуст."""
-    return "server" if os.environ.get("API_ROOT_PATH") else "local"
-
-def _report_usage(usage: dict) -> None:
-    """Отдать счётчик токенов трассировке.
-
-    Сам по себе он в неё не попадает: наблюдатель ищет `usage_metadata` в корне
-    результата, а результат у нас — объект `Answer`, и счётчики оказываются на
-    уровень глубже. Без этого записи приходят с нулями, то есть расход по проекту
-    посчитать нельзя.
-
-    Вне трассировки дерева вызовов нет — тогда просто выходим.
-    """
-    tree = get_current_run_tree()
-    if tree is None:
-        return
-    prompt = usage.get("prompt_tokens", 0)
-    completion = usage.get("completion_tokens", 0)
-    tree.metadata["usage_metadata"] = {
-        "input_tokens": prompt,
-        "output_tokens": completion,
-        "total_tokens": usage.get("total_tokens", prompt + completion),
-    }
-
 
 PROVIDERS = {
     "groq": ("https://api.groq.com/openai/v1", "openai/gpt-oss-20b"),
@@ -58,12 +33,18 @@ PROVIDERS = {
 }
 
 
+def _environment() -> str:
+    """Откуда сделан вызов. Отдельной переменной не заводим: различие уже выражено
+    префиксом сервиса — на сервере он задан, локально пуст."""
+    return "server" if os.environ.get("API_ROOT_PATH") else "local"
+
+
 @dataclass
 class Answer:
-    """Ответ модели. `reasoning` держим отдельно и наружу не отдаём."""
+    """Ответ модели. Счётчики токенов держим рядом: по ним видно, съело ли бюджет
+    рассуждение gpt-oss, из-за которого content приходит пустым."""
 
     content: str
-    reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     model: str = ""
@@ -86,6 +67,18 @@ class LLMClient:
         if not self.api_key:
             raise RuntimeError("Нет LLM_API_KEY — задать в .env или в окружении")
 
+    def _chat(self, max_tokens: int, temperature: float) -> ChatOpenAI:
+        return ChatOpenAI(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=self.timeout,
+            max_retries=0,  # повтор решает вызывающий: тихий ретрай съедает время молча
+            default_headers={"User-Agent": USER_AGENT},  # без него Cloudflare отдаёт 403
+        )
+
     def ask(
         self,
         messages: list[dict],
@@ -94,56 +87,22 @@ class LLMClient:
         temperature: float = 0.2,
         inn: str | None = None,
     ) -> Answer:
-        """Вызов модели, при включённой трассировке — с записью в LangSmith.
+        """Вызов модели. При заданном ключе LangSmith запись создаётся сама.
 
-        Трассировка не может стать причиной отказа. Поэтому оборачивается только
-        её настройка: если она не удалась, вызов идёт напрямую. Оборачивать сам
-        вызов в try нельзя — упавшую модель это превратило бы в повторный запрос,
-        а пользователь получил бы поведение, которого не просил.
+        `inn` и окружение уходят в запись метаданными: без них записи неразличимы —
+        непонятно, о какой компании речь и пришёл ли вызов с сервера или с ноутбука.
         """
-        call = self._call
-        if langsmith_utils.tracing_is_enabled():
-            try:
-                call = traceable(
-                    run_type="llm",
-                    name="counterparty-chat",
-                    metadata={
-                        "environment": _environment(),
-                        "inn": inn,
-                        "model": self.model,
-                    },
-                )(self._call)
-            except Exception:  # noqa: BLE001 — наблюдение не ломает продукт
-                call = self._call
-        return call(messages, max_tokens, temperature)
-
-    def _call(self, messages: list[dict], max_tokens: int, temperature: float) -> Answer:
-        response = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "User-Agent": USER_AGENT,  # без него Cloudflare отдаёт 403
+        message = self._chat(max_tokens, temperature).invoke(
+            messages,
+            config={
+                "run_name": "counterparty-chat",
+                "metadata": {"environment": _environment(), "inn": inn},
             },
-            content=json.dumps(
-                {
-                    "model": self.model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                }
-            ),
-            timeout=self.timeout,
         )
-        response.raise_for_status()
-        data = response.json()
-        message = data["choices"][0]["message"]
-        usage = data.get("usage", {})
-        _report_usage(usage)
+        usage = message.usage_metadata or {}
         return Answer(
-            content=(message.get("content") or "").strip(),
-            reasoning=message.get("reasoning") or "",
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            completion_tokens=usage.get("completion_tokens", 0),
-            model=data.get("model", self.model),
+            content=(message.text or "").strip(),
+            prompt_tokens=usage.get("input_tokens", 0),
+            completion_tokens=usage.get("output_tokens", 0),
+            model=message.response_metadata.get("model_name", self.model),
         )
