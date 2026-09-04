@@ -78,12 +78,20 @@ def snapshot_chart(
     """
     if any(value is None for _, value in pairs):
         return None
+    # Смысл у столбчатого графика несут подписи, а не название серии: повторять
+    # в нём заголовок значит писать одно и то же дважды.
     return ChartSpec(
         key=key,
         title=title,
         form="bars",
         labels=tuple(label for label, _ in pairs),
-        series=(Series(name=title, unit=unit, values=tuple(v for _, v in pairs)),),
+        series=(
+            Series(
+                name="Сумма" if unit == "₽" else "Количество",
+                unit=unit,
+                values=tuple(v for _, v in pairs),
+            ),
+        ),
         source=source,
     )
 

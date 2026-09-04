@@ -132,3 +132,48 @@ def test_у_предпринимателей_нет_финансовых_гра�
             ключи = {c.key for c in build_charts(record)}
             assert "revenue_assets" not in ключи
             assert "balance" not in ключи
+
+
+@нужен_набор
+def test_числа_на_графике_совпадают_с_фактами_раздела():
+    """Иначе экран противоречит сам себе: в списке одна выручка, на графике другая."""
+    from core.report import build
+
+    сверено = 0
+    for record in _RECORDS:
+        for section in build(record).sections:
+            факты = {f.label: f.value for f in section.facts}
+            for chart in section.charts:
+                if chart.key != "revenue_assets" or "Выручка" not in факты:
+                    continue
+                последняя = chart.series[0].values[-1]
+                assert последняя == факты["Выручка"], (
+                    f"{record['baseInfo']['inn']}: на графике {последняя}, "
+                    f"в фактах {факты['Выручка']}"
+                )
+                сверено += 1
+    assert сверено > 50, f"сверено всего {сверено} компаний — проверка почти ничего не поймала"
+
+
+@нужен_набор
+def test_годы_идут_по_возрастанию():
+    """В выгрузке отчёты лежат от свежего к старому — на графике так читать нельзя."""
+    for record in _RECORDS:
+        for chart in build_charts(record):
+            if chart.form != "lines":
+                continue
+            годы = [int(label) for label in chart.labels]
+            assert годы == sorted(годы), f"{chart.key}: {годы}"
+
+
+@нужен_набор
+def test_ноль_отличается_от_отсутствия_в_ролях():
+    """Компания без исков в роли истца получает столбец нулевой высоты,
+    а не отсутствие столбца."""
+    нулевые = 0
+    for record in _RECORDS:
+        for chart in build_charts(record):
+            if chart.key == "plaintiff_defendant":
+                assert len(chart.series[0].values) == 2
+                нулевые += any(v == 0 for v in chart.series[0].values)
+    assert нулевые > 0, "ни одной компании с нулём в роли — проверка бессмысленна"

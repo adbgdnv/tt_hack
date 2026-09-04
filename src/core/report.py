@@ -50,6 +50,16 @@ FALLBACK_SECTION = "registries"
 
 # График принадлежит разделу и наследует его порядок: раздел с сигналом стоит выше,
 # и его график виден раньше. Отдельного правила приоритета графиков не нужно.
+# Почему в разделе, где график бывает, его сейчас нет. Молчание читается как поломка:
+# пользователь видит числа и не понимает, почему рядом нет картинки.
+CHARTS_MISSING_NOTE: dict[str, str] = {
+    "finances": "Для графика нужна отчётность минимум за два года — здесь её меньше",
+    "courts": "Для графика нужны суммы по ролям или дела минимум за два года",
+    "enforcement": "Графика нет: производств в отчёте не значится",
+}
+
+CHARTS_NOT_APPLICABLE_NOTE = "У ИП бухгалтерской отчётности не бывает — графика нет"
+
 CHART_SECTIONS: dict[str, str] = {
     "revenue_assets": "finances",
     "balance": "finances",
@@ -117,6 +127,8 @@ class Section:
     factors: tuple[Factor, ...] = ()
     facts: tuple[Fact, ...] = ()
     charts: tuple[ChartSpec, ...] = ()
+    # Почему графика нет. Пусто, когда график есть или когда его тут и не бывает.
+    charts_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -268,6 +280,15 @@ def _state(key: str, factors: list[Factor], facts: tuple[Fact, ...], entrepreneu
     return State.FILLED if facts else State.EMPTY
 
 
+def _charts_note(key: str, state: State, charts: list[ChartSpec]) -> str:
+    """Объяснение отсутствия графика — только там, где график вообще бывает."""
+    if charts or key not in CHARTS_MISSING_NOTE:
+        return ""
+    if state is State.NOT_APPLICABLE:
+        return CHARTS_NOT_APPLICABLE_NOTE
+    return CHARTS_MISSING_NOTE[key]
+
+
 def build(record: dict) -> Report:
     """Собирает представление отчёта из записи контрагента."""
     base = record.get("baseInfo") or {}
@@ -296,6 +317,7 @@ def build(record: dict) -> Report:
                 charts=(
                     tuple(by_chart_section[key]) if state is not State.NOT_APPLICABLE else ()
                 ),
+                charts_note=_charts_note(key, state, by_chart_section[key]),
             )
         )
 

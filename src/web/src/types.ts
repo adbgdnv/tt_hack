@@ -101,6 +101,8 @@ export type ReportSectionData = {
   facts: ReportFact[];
   /** Графики раздела. Пустой список означает, что данных на график не хватило. */
   charts: ChartSpec[];
+  /** Почему графика нет. Пусто, когда график есть или когда его тут не бывает. */
+  charts_note: string;
 };
 
 export type RiskAssessment = {

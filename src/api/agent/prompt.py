@@ -77,6 +77,22 @@ def render_report(report: Report) -> str:
             lines.append(f"    • {factor.heading}. {factor.explanation}")
         for fact in section.facts:
             lines.append(f"    {fact.label}: {fact.value}")
+        # Ряды графиков идут в контекст теми же числами, что нарисованы на экране.
+        # Иначе ответ про выручку разойдётся с графиком рядом, и проверить его
+        # будет нельзя — а проверяемость и есть смысл продукта.
+        for chart in section.charts:
+            for ряд in chart.series:
+                значения = ", ".join(
+                    f"{label} {value}"
+                    for label, value in zip(chart.labels, ряд.values, strict=False)
+                    if value is not None
+                )
+                if not значения:
+                    continue
+                # У столбчатых графиков смысл несут подписи, а не название серии:
+                # оно там совпадает с заголовком и повторять его незачем.
+                подпись = chart.title if chart.form == "bars" else f"{chart.title} — {ряд.name}"
+                lines.append(f"    {подпись}: {значения}")
     return "\n".join(lines)
 
 

@@ -1427,3 +1427,10 @@ input:focus-visible,
   font-size: 11px;
   color: var(--color-light-text-tertiary, #8d8d93);
 }
+
+.report-section__chart-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-light-text-tertiary, #8d8d93);
+}

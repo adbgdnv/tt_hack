@@ -2,7 +2,6 @@ import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { ModalDesktop } from '@alfalab/core-components-modal/desktop';
 import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
 import type { BlockKey, Counterparty } from '../types';
-import { FinancialChart } from './FinancialChart';
 
 type Props = {
   company: Counterparty;
@@ -50,7 +49,6 @@ export function BlockModal({ company, blockKey, highlighted, onClose, onOpenBloc
             </dl>
           )}
 
-          {block.key === 'finances' && company.financials && <FinancialChart data={company.financials} />}
 
           <section className="ai-analysis">
             <div className="ai-analysis__eyebrow">AI-разбор блока</div>

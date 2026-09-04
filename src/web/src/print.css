@@ -43,3 +43,21 @@
     background: #fff !important;
   }
 }
+
+@media print {
+  /* График не должен рваться между страницами: половина столбцов на одной,
+     половина на другой — хуже, чем его отсутствие. */
+  .report-chart {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Значения текстом на бумаге обязательны: наведения мышью там нет. */
+  .report-chart__values {
+    font-size: 11px;
+  }
+
+  .report-chart__canvas {
+    height: 150px;
+  }
+}

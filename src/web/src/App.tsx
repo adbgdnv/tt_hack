@@ -11,7 +11,6 @@ import type { BlockKey, Counterparty, CounterpartyReport, HistoryItem, ReportBlo
 import { BlockModal } from './components/BlockModal';
 import { ChatPanel } from './components/ChatPanel';
 import { ReportSection } from './components/ReportSection';
-import { FinancialChart } from './components/FinancialChart';
 
 const HISTORY_KEY = 'counterparty-check-history-v1';
 const blockOrder: BlockKey[] = ['registration', 'finances', 'courts', 'enforcement', 'registries', 'activity'];
@@ -303,15 +302,6 @@ function Dashboard({ company, report, onHome, onOpenBlock, chatContext, onToast,
                 ? report.sections.map((section) => <ReportSection key={section.key} section={section} />)
                 : blockOrder.map((key) => <RiskBlockCard key={key} block={company.blocks[key]} onOpen={() => onOpenBlock(key)} />)}
             </div>
-            {company.financials && (
-              <section className="finance-card">
-                <div className="finance-card__heading">
-                  <div><span className="eyebrow">Финансы</span><h2>Динамика показателей</h2></div>
-                  <ButtonDesktop size={40} view="secondary" onClick={() => onOpenBlock('finances')}>Подробнее</ButtonDesktop>
-                </div>
-                <FinancialChart data={company.financials} />
-              </section>
-            )}
           </section>
           <ChatPanel report={report} onToast={onToast} />
         </div>

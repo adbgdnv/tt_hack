@@ -62,6 +62,10 @@ export function ReportSection({ section }: { section: ReportSectionData }) {
         <ReportChart key={chart.key} spec={chart} />
       ))}
 
+      {/* Молчание там, где график ожидается, читается как поломка вёрстки.
+          Объяснение приходит с сервера готовым. */}
+      {section.charts_note && <p className="report-section__chart-note">{section.charts_note}</p>}
+
       {section.facts.length > 0 && (
         <dl className="report-section__facts">
           {section.facts.map((fact) => (
