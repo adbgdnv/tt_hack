@@ -26,19 +26,6 @@ jobs:
           # для workflow_run — тот же коммит, что прошёл CI; для dispatch — main
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      - name: Есть ли фронтенд для сборки
-        id: web
-        run: |
-          if [ -f src/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
-          else echo "present=false" >> "$GITHUB_OUTPUT"; fi
-
-      - uses: actions/setup-node@v4
-        if: steps.web.outputs.present == 'true'
-        with:
-          node-version: lts/*
-          # кэш npm включим, когда в src/web появится package-lock.json
-          # (сейчас его нет — cache-dependency-path уронил бы шаг)
-
       - name: Настроить SSH
         run: |
           install -d -m 700 ~/.ssh
@@ -93,12 +80,28 @@ jobs:
           # ровно на него одной строкой в /etc/sudoers.d/tt-hack-api.
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'sudo /usr/local/bin/tt-hack-api-deploy'
 
-      - name: Выложить превью
+      - name: Выкатить фронтенд
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          # Фронт собирается контейнером на сервере, а не здесь: образ и есть
+          # артефакт выкладки. Раннер больше не запускает npm — сборка и запуск
+          # в одном месте, и на сервер не приезжает собранная где-то ещё статика.
+          #
+          # Сломанная сборка сюда не доедет: скрипт собирает образ до подмены
+          # контейнера, а не поднявшийся фронт откатывает на предыдущий образ.
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'sudo /usr/local/bin/tt-hack-web-deploy'
+
+      - name: Выложить статику превью
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-        run: scripts/preview_deploy.sh
+        # --no-web: сборку фронта забрал шаг выше. Здесь остаётся оверлей ревью
+        # из preview/ — nginx отдаёт его мимо контейнера, и smoke-check по /,
+        # который проверяет уже опубликованный фронт из образа.
+        run: scripts/preview_deploy.sh --no-web
 
       - name: Итог
         if: always()
@@ -107,8 +110,8 @@ jobs:
             echo "### Deploy preview"
             echo ""
             echo "- Коммит: \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
-            echo "- Фронтенд: ${{ steps.web.outputs.present == 'true' && 'сборка' || 'пропуск (нет package.json)' }}"
+            echo "- Фронтенд: образ cc-web собран и запущен на сервере"
             echo "- Результат job: ${{ job.status }}"
             echo ""
-            echo "Логи шага «Выложить превью» содержат коды smoke-check по каждой странице."
+            echo "Логи шага «Выложить статику превью» содержат коды smoke-check по каждой странице."
           } >> "$GITHUB_STEP_SUMMARY"

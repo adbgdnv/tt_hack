@@ -36,6 +36,26 @@ npm run build        # статическая сборка в dist/
 VITE_API_BASE=http://localhost:8000 npm run dev
 ```
 
+## Запуск в докере
+
+Так же, как фронт работает на сервере: node собирает статику, nginx её отдаёт.
+
+```bash
+docker compose up -d --build web     # → http://localhost:5173
+```
+
+Контейнер `cc-web` слушает только localhost и проксирует `/api/` в контейнер `api`
+той же compose-сети — origin один, CORS не нужен. `VITE_API_BASE=/api` вшивается
+в бандл при сборке (build-аргумент в `docker-compose.yml`): поменять адрес API
+в рантайме нельзя, нужна пересборка образа.
+
+Если `api` лежит, `/api/` отвечает `502`, а сама страница продолжает открываться:
+адрес бэкенда резолвится на каждом запросе, а не один раз при старте nginx.
+
+Выкатка на сервер — [deploy/PREVIEW-DEPLOY.md](../../deploy/PREVIEW-DEPLOY.md).
+
+## Контракт с API
+
 Клиент использует `GET /counterparties/:inn` и
 `GET /counterparties/search?q=...`. Сокращённый ответ текущего API адаптируется к
 интерфейсу, а отсутствующие поля остаются честными пустыми состояниями. `POST /chat`

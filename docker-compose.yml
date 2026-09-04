@@ -41,14 +41,34 @@ services:
     volumes:
       - ./dataset:/app/dataset:ro
 
-  # Раскомментировать, когда появится фронт (src/web).
-  # web:
-  #   build:
-  #     context: .
-  #     dockerfile: src/web/Dockerfile
-  #   container_name: cc-web
-  #   ports:
-  #     - "5173:5173"
-  #   depends_on:
-  #     api:
-  #       condition: service_healthy
+  web:
+    build:
+      # Контекст — сам каталог фронтенда, а не корень: в образ не должно попадать
+      # ничего из data/ и dataset/, а сборке нужны только исходники src/web.
+      context: ./src/web
+      dockerfile: Dockerfile
+      args:
+        # Относительный путь, а не адрес сервера: запрос идёт на тот же origin,
+        # поэтому не нужен CORS и действует та же basic-авторизация. На сервере
+        # /api/ забирает nginx хоста, локально — nginx внутри контейнера.
+        VITE_API_BASE: /api
+    # Явный тег, а не имя по каталогу проекта: выкатка на сервере сохраняет
+    # предыдущий образ как cc-web:previous и откатывается на него, если новый
+    # не поднялся. Без фиксированного имени откат ловил бы образ наугад.
+    image: cc-web:latest
+    container_name: cc-web
+    restart: unless-stopped
+    ports:
+      # Тоже только localhost: наружу фронт отдаёт nginx сервера, и делает это
+      # за basic-авторизацией. На сервере ufw выключен — всё, что забиндится
+      # на 0.0.0.0, немедленно доступно из интернета, а за /api/ лежат ФИО
+      # и личные ИНН учредителей.
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
