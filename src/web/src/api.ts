@@ -1,5 +1,14 @@
 import { findFixtureByInn, searchFixtures } from './fixtures';
-import type { BlockKey, Counterparty, CounterpartyReport, ReportBlock, Signal } from './types';
+import type {
+  BlockKey,
+  Counterparty,
+  CounterpartyReport,
+  ReportBlock,
+  ReportFactor,
+  ReportSectionData,
+  SectionState,
+  Signal,
+} from './types';
 
 const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 
@@ -138,6 +147,51 @@ function adaptApiReport(raw: Counterparty | SlimApiReport): Counterparty {
     },
   };
   return company;
+}
+
+const SECTION_KEYS: BlockKey[] = ['registration', 'finances', 'courts', 'enforcement', 'registries', 'activity'];
+
+/**
+ * Приводит `Counterparty.blocks` — офлайн-заготовку или сокращённый ответ API — к тому
+ * же виду, что и собранный `CounterpartyReport.sections`.
+ *
+ * До этой функции у дашборда было два рисующих пути: собранный отчёт и отдельная
+ * карточка для урезанных данных, визуально и структурно не согласованные друг
+ * с другом. Отчёт либо настоящий, либо построен из того же контракта, что и он, —
+ * третьего представления быть не должно.
+ */
+export function sectionsFromCompany(company: Counterparty): ReportSectionData[] {
+  return SECTION_KEYS.map((key) => {
+    const block = company.blocks[key];
+    const state: SectionState = block.notApplicable
+      ? 'not_applicable'
+      : block.empty
+        ? 'empty'
+        : block.signal === 'red' || block.signal === 'yellow'
+          ? 'signal'
+          : 'filled';
+
+    // Заготовки не несут отдельного веса фактора — переносим силу индикатора блока,
+    // чтобы вывод «Второй взгляд» мог её учитывать так же, как вес из настоящего отчёта.
+    const factors: ReportFactor[] = state === 'signal'
+      ? [{ code: key, heading: block.preview[0] ?? block.title, explanation: block.analysis, weight: block.signal === 'red' ? 3 : 1 }]
+      : [];
+
+    return {
+      key,
+      title: block.title,
+      state,
+      note: state === 'empty'
+        ? 'Данных нет — оценить по этому критерию невозможно'
+        : state === 'not_applicable'
+          ? 'У ИП такого не бывает'
+          : '',
+      factors,
+      facts: block.details.map((detail) => ({ label: detail.label, value: detail.value, kind: 'text' as const })),
+      charts: [],
+      charts_note: '',
+    };
+  });
 }
 
 export async function searchCounterparties(query: string): Promise<Counterparty[]> {

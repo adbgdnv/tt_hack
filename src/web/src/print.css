@@ -5,11 +5,11 @@
 @media print {
   .app-header,
   .back-link,
-  .detail-panel__back,
+  .section-detail__back,
   .report-actions,
   .chat-panel,
-  .compare-bar,
   .toast-wrap,
+  .completion-bar,
   .indicator-legend {
     display: none !important;
   }

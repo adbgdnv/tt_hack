@@ -1,4 +1,5 @@
 import { Amount } from '@alfalab/core-components-amount';
+import { Indicator } from '@alfalab/core-components-indicator';
 import { Status } from '@alfalab/core-components-status';
 
 import { ReportChart } from './ReportChart';
@@ -9,6 +10,13 @@ const STATE_COLOR: Record<SectionState, 'red' | 'green' | 'grey'> = {
   filled: 'green',
   empty: 'grey',
   not_applicable: 'grey',
+};
+
+const DOT_COLOR: Record<SectionState, string> = {
+  signal: '#ec2d20',
+  filled: '#0d9336',
+  empty: '#9a9da4',
+  not_applicable: '#9a9da4',
 };
 
 export const STATE_LABEL: Record<SectionState, string> = {
@@ -23,6 +31,18 @@ const SIGNIFICANCE_LABEL: Record<SectionState, string> = {
   filled: 'Нейтральная значимость',
   empty: 'Значимость не оценена',
   not_applicable: 'Оценка не применяется',
+};
+
+/** Что входит в раздел — коротко, для детального вида (ux_design.md, «Description»). */
+const SECTION_DESCRIPTION: Record<string, string> = {
+  registration: 'Статус, возраст, адрес и реквизиты по данным ЕГРЮЛ/ЕГРИП.',
+  finances: 'Выручка, прибыль и структура активов по сданной бухгалтерской отчётности.',
+  courts: 'Арбитражные дела: в какой роли компания участвует и на какие суммы.',
+  enforcement: 'Исполнительные производства ФССП — действующие и завершённые.',
+  registries: 'Реестры ФНС и профильных ведомств: массовые адреса, блокировки, банкротство и похожее.',
+  activity: 'Основной и дополнительные виды деятельности по ОКВЭД.',
+  management: 'Кто руководит компанией и на каком основании.',
+  related: 'Организации, связанные через учредителей или руководство.',
 };
 
 const RAW_VALUE_LABEL: Record<string, string> = {
@@ -102,26 +122,46 @@ function Facts({ facts }: { facts: ReportFact[] }) {
   );
 }
 
+/**
+ * Модификатор карточки — визуальное «вычитание»: сигнальные разделы заметны,
+ * спокойные (данные есть, ничего не сработало) — нейтральны, недостающие или
+ * неприменимые — приглушены. Порядок разделов при этом не меняется нигде выше:
+ * значимость выражена стилем, а не местом в сетке.
+ */
+function stateModifier(state: SectionState): string {
+  if (state === 'signal') return 'report-section--signal';
+  if (state === 'empty' || state === 'not_applicable') return 'report-section--muted';
+  return 'report-section--filled';
+}
+
 export function ReportSection({ section, onOpen, mode = 'preview' }: {
   section: ReportSectionData;
   onOpen?: () => void;
   mode?: 'preview' | 'detail';
 }) {
-  const muted = section.state === 'empty' || section.state === 'not_applicable';
   const factors = section.factors ?? [];
   const facts = section.facts ?? [];
   const charts = section.charts ?? [];
   const note = sectionNote(section);
   const preview = mode === 'preview';
+  // Раздел с несколькими сработавшими факторами занимает всю ширину сетки —
+  // ему действительно нужно больше места, а не потому что так решил порядок.
+  const wide = preview && factors.length >= 3;
 
   const content = (
     <>
       <header className="report-section__head">
-        <h3>{section.title}</h3>
+        <div className="report-section__title">
+          <Indicator size={8} backgroundColor={DOT_COLOR[section.state]} />
+          <h3>{section.title}</h3>
+        </div>
         <Status size={20} view="soft" color={STATE_COLOR[section.state]}>
           {STATE_LABEL[section.state]}
         </Status>
       </header>
+      {!preview && SECTION_DESCRIPTION[section.key] && (
+        <p className="report-section__description">{SECTION_DESCRIPTION[section.key]}</p>
+      )}
       <p className="report-section__significance">{SIGNIFICANCE_LABEL[section.state]}</p>
       {note && <p className="report-section__note">{note}</p>}
 
@@ -129,7 +169,7 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
 
       {factors.length > 0 && (
         <ul className="report-section__factors">
-          {(preview ? factors.slice(0, 1) : factors).map((factor) => (
+          {(preview ? factors.slice(0, wide ? 4 : 1) : factors).map((factor) => (
             <li key={factor.code}>
               <strong>{factor.heading}</strong>
               {!preview && <p>{FACTOR_EXPLANATION[factor.code] ?? factor.explanation}</p>}
@@ -146,21 +186,15 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
     </>
   );
 
+  const className = `report-section report-section--${preview ? 'preview' : 'detail'} ${stateModifier(section.state)}${wide ? ' report-section--wide' : ''}`;
+
   if (preview) {
     return (
-      <button
-        className={`report-section report-section--preview${muted ? ' report-section--muted' : ''}`}
-        type="button"
-        onClick={onOpen}
-      >
+      <button className={className} type="button" onClick={onOpen}>
         {content}
       </button>
     );
   }
 
-  return (
-    <section className={`report-section report-section--detail${muted ? ' report-section--muted' : ''}`}>
-      {content}
-    </section>
-  );
+  return <section className={className}>{content}</section>;
 }
