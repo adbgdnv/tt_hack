@@ -16,6 +16,7 @@ from langchain_core.tools import tool
 from langgraph.runtime import get_runtime
 
 from api.agent.graph import Context
+from api.agent.prompt import amount
 from core.charts import build_charts
 
 # Русское название рядом с ключом — часть контракта, а не украшение. Без него
@@ -41,7 +42,10 @@ def _values(spec) -> str:
     return "; ".join(
         f"{series.name}: "
         + ", ".join(
-            f"{label} {value}"
+            # Разряды и порядок словами — тем же кодом, что и в отчёте. Голое
+            # `2589790444.0` модель прочитала как «2.59 млн», промахнувшись
+            # в тысячу раз: считать цифры в потоке токенов она не умеет.
+            f"{label} — {amount(value, series.unit)}"
             for label, value in zip(spec.labels, series.values, strict=False)
             if value is not None
         )
