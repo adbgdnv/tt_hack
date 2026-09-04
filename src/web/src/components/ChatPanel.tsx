@@ -4,23 +4,21 @@ import { InputDesktop } from '@alfalab/core-components-input/desktop';
 import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
 
 import { streamChat } from '../api';
-import type { CounterpartyReport } from '../types';
-import { ReportChart } from './ReportChart';
-
-/** Вызов инструмента в ленте: пользователь видит, чем занят агент. */
-type Step = { id: string; title: string; done: boolean; ok: boolean };
-type Source = { title: string; url: string };
+import type { CounterpartyReport, MessageBlock } from '../types';
+import { ChatMarkdown } from './ChatMarkdown';
+import { ToolBlock } from './ToolBlock';
 
 type Message =
   | { id: string; role: 'user'; text: string }
   | {
       id: string;
       role: 'agent';
-      text: string;
+      /** Упорядоченная последовательность блоков: текст и вызовы вперемешку,
+       *  ровно в том порядке, в каком они происходили. Прежде здесь были три
+       *  отдельных списка, и один вызов оказывался разорван между началом
+       *  и концом сообщения. */
+      blocks: MessageBlock[];
       sections: string[];
-      steps: Step[];
-      charts: string[];
-      sources: Source[];
       streaming: boolean;
     }
   /** Сбой сервиса — отдельная роль, а не ответ: путать их нельзя. */
@@ -95,14 +93,25 @@ export function ChatPanel({ report, onToast }: {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Брошенный поток на сервере продолжал бы тратить квоту, общую на всех.
   const abortRef = useRef<AbortController | null>(null);
+  /** Раскрытый вызов — один на всю ленту: развёрнутая страница и развёрнутый
+   *  поиск разом выталкивают текст ответа с экрана. */
+  const [openTool, setOpenTool] = useState<string | null>(null);
+  /** Внизу ли пользователь. Обновляется прокруткой, а не подсчётом при отрисовке. */
+  const stickToBottom = useRef(true);
   const sessionId = useMemo(() => `s-${Math.random().toString(36).slice(2)}`, []);
   const questions = useMemo(
     () => suggestionPool(report).filter((question) => !askedQuestions.includes(question)).slice(0, 3),
     [askedQuestions, report],
   );
 
+  // Держим ленту внизу, только пока пользователь и так внизу. Иначе отлистать
+  // вверх во время ответа невозможно: каждое пришедшее слово утаскивало бы
+  // обратно. Плавную прокрутку во время печати не включаем — на каждом слове
+  // она превращается в дрожание.
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    const element = scrollRef.current;
+    if (!element || !stickToBottom.current) return;
+    element.scrollTop = element.scrollHeight;
   }, [messages, busy]);
 
   // Смена контрагента сбрасывает переписку: ответы о предыдущей компании
@@ -121,31 +130,45 @@ export function ChatPanel({ report, onToast }: {
     const clean = question.trim();
     if (!clean || busy || !report) return;
     setInput('');
-    // Заданный вопрос убираем из подсказок и подставляем следующий из пула.
-    setAskedQuestions((current) => (current.includes(clean) ? current : [...current, clean]));
     const replyId = crypto.randomUUID();
     setMessages((current) => [
       ...current,
       { id: crypto.randomUUID(), role: 'user', text: clean },
-      {
-        id: replyId,
-        role: 'agent',
-        text: '',
-        sections: [],
-        steps: [],
-        charts: [],
-        sources: [],
-        streaming: true,
-      },
+      { id: replyId, role: 'agent', blocks: [], sections: [], streaming: true },
     ]);
     setBusy(true);
 
-    // Правку ответа держим в одном месте: событий много, а меняют они
-    // всегда одно и то же сообщение.
-    const patch = (change: (m: Extract<Message, { role: 'agent' }>) => Partial<Message>) =>
+    // Блоки копятся здесь, а в состояние уезжают раз в кадр. Порядок при этом
+    // не страдает: накопитель меняется сразу, отрисовка догоняет. Без этого
+    // разметка разбиралась бы заново на каждое пришедшее слово.
+    const blocks: MessageBlock[] = [];
+    let frame: number | null = null;
+    const flush = () => {
+      frame = null;
       setMessages((current) =>
-        current.map((m) => (m.id === replyId && m.role === 'agent' ? { ...m, ...change(m) } : m)),
+        current.map((m) =>
+          m.id === replyId && m.role === 'agent' ? { ...m, blocks: [...blocks] } : m,
+        ),
       );
+    };
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(flush);
+    };
+
+    const appendText = (text: string) => {
+      const last = blocks[blocks.length - 1];
+      if (last && last.kind === 'text') last.text += text;
+      else blocks.push({ kind: 'text', text });
+      schedule();
+    };
+    /** Последний открытый вызов — ему принадлежит пришедший результат. */
+    const lastCall = () => {
+      for (let i = blocks.length - 1; i >= 0; i -= 1) {
+        const block = blocks[i];
+        if (block.kind === 'tool') return block.call;
+      }
+      return null;
+    };
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -153,25 +176,35 @@ export function ChatPanel({ report, onToast }: {
     try {
       for await (const event of streamChat(report.inn, clean, sessionId, controller.signal)) {
         if (event.name === 'token') {
-          patch((m) => ({ text: m.text + event.data.text }));
+          appendText(event.data.text);
         } else if (event.name === 'tool_start') {
-          patch((m) => ({
-            steps: [...m.steps, { id: event.data.tool, title: event.data.title, done: false, ok: true }],
-          }));
-        } else if (event.name === 'tool_end') {
-          patch((m) => ({
-            steps: m.steps.map((s, i) =>
-              i === m.steps.length - 1 ? { ...s, done: true, ok: event.data.ok } : s,
-            ),
-          }));
+          // Вызов открывается НА ТЕКУЩЕМ МЕСТЕ — отсюда и берётся порядок
+          // «текст → вызов → текст». Вычислять его потом неоткуда.
+          blocks.push({
+            kind: 'tool',
+            call: { tool: event.data.tool, title: event.data.title, state: 'running' },
+          });
+          schedule();
         } else if (event.name === 'chart') {
-          patch((m) => ({ charts: [...m.charts, event.data.chart] }));
+          const call = lastCall();
+          if (call) call.chart = event.data.chart;
+          schedule();
         } else if (event.name === 'sources') {
-          patch((m) => ({ sources: event.data.items }));
+          const call = lastCall();
+          if (call) call.sources = event.data.items;
+          schedule();
+        } else if (event.name === 'tool_end') {
+          const call = lastCall();
+          if (call) call.state = event.data.ok ? 'ok' : 'failed';
+          schedule();
         } else if (event.name === 'error') {
           failed = event.data.detail;
         } else if (event.name === 'done') {
-          patch((m) => ({ sections: event.data.sections, streaming: false }));
+          setMessages((current) =>
+            current.map((m) =>
+              m.id === replyId && m.role === 'agent' ? { ...m, sections: event.data.sections } : m,
+            ),
+          );
         }
       }
     } catch (error) {
@@ -180,14 +213,28 @@ export function ChatPanel({ report, onToast }: {
       }
     } finally {
       abortRef.current = null;
-      patch(() => ({ streaming: false }));
+      if (frame !== null) cancelAnimationFrame(frame);
+      // Вызовы, до которых не дошло завершение, — прерваны, а не выполняются.
+      // Иначе оборванный ответ оставляет их крутящимися навсегда.
+      for (const block of blocks) {
+        if (block.kind === 'tool' && block.call.state === 'running') block.call.state = 'aborted';
+      }
+      const finalBlocks = [...blocks];
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === replyId && m.role === 'agent'
+            ? { ...m, blocks: finalBlocks, streaming: false }
+            : m,
+        ),
+      );
       setBusy(false);
     }
 
     if (failed) {
       // Уже показанный текст не убираем: он настоящий. Сбой добавляется рядом.
+      const saidSomething = blocks.some((b) => b.kind === 'text' && b.text.trim());
       setMessages((current) => [
-        ...current.filter((m) => m.id !== replyId || (m.role === 'agent' && m.text.length > 0)),
+        ...current.filter((m) => m.id !== replyId || saidSomething),
         { id: crypto.randomUUID(), role: 'failure', text: failed },
       ]);
       onToast('Разбор недоступен — отчёт остаётся полным');
@@ -204,7 +251,15 @@ export function ChatPanel({ report, onToast }: {
         <span className="chat-memory">Память в этой сессии</span>
       </header>
 
-      <div className="chat-scroll" ref={scrollRef}>
+      <div
+        className="chat-scroll"
+        ref={scrollRef}
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          const fromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+          stickToBottom.current = fromBottom < 80;
+        }}
+      >
         <div className="agent-message agent-message--summary">
           <span className="message-author">Ассистент</span>
           <p>Отвечаю только по этому отчёту. Чего в нём нет — так и скажу.</p>
@@ -223,51 +278,35 @@ export function ChatPanel({ report, onToast }: {
             <div className="agent-message" key={message.id}>
               <span className="message-author">Ассистент</span>
 
-              {message.steps.map((step, index) => (
-                <details className="agent-step" key={`${step.id}-${index}`}>
-                  <summary>
-                    {step.done ? (step.ok ? '✓' : '✕') : '⋯'} {step.title}
-                  </summary>
-                  <span>
-                    {step.ok
-                      ? 'Данные для ответа взяты отсюда.'
-                      : 'Шаг не удался — то, что ниже, на него не опирается.'}
-                  </span>
-                </details>
-              ))}
-
-              <p className="agent-message__text">
-                {message.text}
-                {message.streaming && <span className="agent-caret" aria-hidden="true" />}
-              </p>
-
-              {/* График рисуется из уже загруженного отчёта по ключу: так числа
-                  в чате физически не могут разойтись с дашбордом. */}
-              {message.charts.map((key) => {
-                const spec = report?.sections
-                  .flatMap((section) => section.charts)
-                  .find((chart) => chart.key === key);
-                return spec ? (
-                  <div className="agent-message__chart" key={key}>
-                    <ReportChart spec={spec} />
-                  </div>
-                ) : null;
-              })}
-
-              {message.sources.length > 0 && (
-                <div className="agent-message__sources">
-                  <span>Внешние источники — отчётом не подтверждены:</span>
-                  <ul>
-                    {message.sources.map((source) => (
-                      <li key={source.url}>
-                        <a href={source.url} target="_blank" rel="noopener noreferrer">
-                          {source.title || source.url}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {/* Блоки идут ровно в том порядке, в каком происходили. Результат
+                  вызова лежит внутри своего вызова, а не в конце сообщения. */}
+              {message.blocks.map((block, index) =>
+                block.kind === 'text' ? (
+                  <ChatMarkdown key={`t${index}`} text={block.text} />
+                ) : (
+                  <ToolBlock
+                    key={`c${index}`}
+                    call={block.call}
+                    chart={
+                      block.call.chart
+                        ? report?.sections
+                            .flatMap((section) => section.charts)
+                            .find((chart) => chart.key === block.call.chart)
+                        : undefined
+                    }
+                    expanded={openTool === `${message.id}:${index}`}
+                    onToggle={() =>
+                      setOpenTool((current) =>
+                        current === `${message.id}:${index}` ? null : `${message.id}:${index}`,
+                      )
+                    }
+                  />
+                ),
               )}
+
+              {/* Курсор живёт вне разбора разметки: внутри он попал бы
+                  в разбираемую строку и ломал бы её. */}
+              {message.streaming && <span className="agent-caret" aria-hidden="true" />}
 
               {message.sections.length > 0 && (
                 <div className="agent-message__grounding">
@@ -286,7 +325,10 @@ export function ChatPanel({ report, onToast }: {
         )}
 
         {/* Индикатор нужен только до первого слова: дальше видно сам ответ. */}
-        {busy && !messages.some((m) => m.role === 'agent' && m.streaming && m.text) && (
+        {busy &&
+          !messages.some(
+            (m) => m.role === 'agent' && m.streaming && m.blocks.length > 0,
+          ) && (
           <div className="agent-message progress-card" aria-live="polite">
             <span className="message-author">Ассистент</span>
             <p>Читаю отчёт…</p>

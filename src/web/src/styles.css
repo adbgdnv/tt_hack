@@ -1396,12 +1396,6 @@ input:focus-visible,
 
 /* ─────────── Диалог ─────────── */
 
-.agent-message__text {
-  margin: 4px 0 0;
-  white-space: pre-wrap;
-  line-height: 20px;
-}
-
 .agent-message__grounding {
   display: flex;
   flex-wrap: wrap;
@@ -1499,32 +1493,122 @@ input:focus-visible,
   color: var(--color-light-text-tertiary, #8d8d93);
 }
 
-/* ─── Работа агента в ленте ─────────────────────────────────────────────
-   Инструмент добавляет паузу внутри ответа. Без объяснения эта пауза читается
-   как зависание, поэтому шаг виден — но свёрнутым, чтобы не мешать читать ответ. */
-.agent-step {
-  margin: 6px 0 0;
-  font-size: 13px;
+
+/* ─── Разметка ответа ────────────────────────────────────────────────────
+   Модель отвечает в markdown. Отступы прижаты: в узкой панели чата обычные
+   типографские интервалы съедают экран. */
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+
+.md p { margin: 0 0 8px; line-height: 20px; }
+
+.md h1, .md h2, .md h3, .md h4 {
+  margin: 12px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.md ul, .md ol { margin: 0 0 8px; padding-left: 20px; }
+.md li { margin-bottom: 4px; line-height: 20px; }
+.md li > p { margin: 0; }
+
+.md strong { font-weight: 600; }
+
+.md code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--color-light-bg-secondary, #f3f4f5);
+  font-size: 12px;
+}
+
+.md pre {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--color-light-bg-secondary, #f3f4f5);
+}
+
+.md pre code { padding: 0; background: none; }
+
+.md blockquote {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-light-border-secondary, #dbdee1);
   color: var(--color-light-text-secondary, #6b7683);
 }
 
-.agent-step > summary {
-  cursor: pointer;
-  list-style: none;
+.md a { color: var(--color-light-text-link, #0072ef); }
+
+.md hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid var(--color-light-border-secondary, #dbdee1);
+}
+
+/* Таблица прокручивается внутри себя. Без этого широкая таблица уводит вбок
+   всю страницу — в узкой панели чата это происходит почти всегда. */
+.md-table-scroll {
+  margin: 0 0 8px;
+  overflow-x: auto;
+  border: 1px solid var(--color-light-border-secondary, #dbdee1);
+  border-radius: 8px;
+}
+
+.md-table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.md-table-scroll th, .md-table-scroll td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-light-border-secondary, #dbdee1);
+  white-space: nowrap;
+}
+.md-table-scroll th { font-weight: 600; }
+.md-table-scroll tr:last-child td { border-bottom: none; }
+
+/* ─── Вызов инструмента ──────────────────────────────────────────────────
+   Шум второго плана: работа агента видна, но внимание остаётся на ответе. */
+.tool-block { margin: 6px 0; }
+
+.tool-block__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
   padding: 4px 8px;
+  border: none;
   border-radius: 8px;
   background: var(--color-light-bg-secondary, #f3f4f5);
-  display: inline-block;
+  color: var(--color-light-text-secondary, #6b7683);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.agent-step > summary::-webkit-details-marker {
-  display: none;
-}
+.tool-block__head:disabled { cursor: default; }
+.tool-block__head:not(:disabled):hover { color: var(--color-light-text-primary, #0b1f35); }
 
-.agent-step > span {
-  display: block;
-  padding: 6px 8px 0;
+.tool-block__mark { flex-shrink: 0; }
+.tool-block__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.tool-block--failed .tool-block__mark { color: var(--color-light-status-negative, #ef3124); }
+.tool-block--aborted .tool-block__mark { color: var(--color-light-status-attention, #f5a623); }
+
+.tool-block__body { padding: 8px 8px 0; }
+.tool-block__note { margin: 0 0 6px; font-size: 12px; color: var(--color-light-text-secondary, #6b7683); }
+.tool-block__chart { margin-bottom: 8px; }
+
+/* Внешние источники держим визуально отдельно от фактов отчёта: слияние слоёв
+   ломает проверяемость — пользователь не отличит выверенное от найденного. */
+.tool-block__sources {
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-light-status-attention, #f5a623);
+  background: var(--color-light-bg-primary, #fff);
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
 }
+.tool-block__sources ul { margin: 4px 0 0; padding-left: 16px; }
+.tool-block__sources a { color: var(--color-light-text-link, #0072ef); }
 
 /* Курсор набора: видно, что ответ ещё идёт, а не оборвался. */
 .agent-caret {
@@ -1537,305 +1621,8 @@ input:focus-visible,
   animation: agent-caret-blink 1s step-end infinite;
 }
 
-@keyframes agent-caret-blink {
-  50% { opacity: 0; }
-}
+@keyframes agent-caret-blink { 50% { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   .agent-caret { animation: none; }
-}
-
-.agent-message__chart {
-  margin-top: 12px;
-}
-
-/* Внешние источники держим визуально отдельно от фактов отчёта: слияние слоёв
-   ломает проверяемость — пользователь не отличит выверенное от найденного. */
-.agent-message__sources {
-  margin-top: 10px;
-  padding: 8px 10px;
-  border-left: 3px solid var(--color-light-status-attention, #f5a623);
-  background: var(--color-light-bg-secondary, #f3f4f5);
-  border-radius: 0 8px 8px 0;
-  font-size: 13px;
-}
-
-.agent-message__sources ul {
-  margin: 4px 0 0;
-  padding-left: 16px;
-}
-
-.agent-message__sources a {
-  color: var(--color-light-text-link, #0072ef);
-}
-
-/* ─────────── Компактные preview и детальный раздел ─────────── */
-
-.report-section--preview {
-  min-width: 0;
-  min-height: 210px;
-  display: flex;
-  flex-direction: column;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
-}
-
-.report-section--preview:hover {
-  border-color: #aeb1b7;
-  box-shadow: 0 5px 16px rgba(26, 29, 33, 0.06);
-  transform: translateY(-1px);
-}
-
-.report-section--muted {
-  opacity: 0.72;
-}
-
-.report-section--detail.report-section--muted {
-  opacity: 1;
-}
-
-.report-section__significance {
-  margin: 0 0 8px;
-  color: #777a80;
-  font-size: 11px;
-  line-height: 15px;
-}
-
-.report-section__note {
-  margin-bottom: 12px;
-  line-height: 18px;
-}
-
-.report-section__facts {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px 14px;
-}
-
-.report-section__facts > div {
-  min-width: 0;
-  display: grid;
-  justify-content: start;
-  gap: 3px;
-}
-
-.report-section__facts dd {
-  overflow-wrap: anywhere;
-  font-size: 14px;
-  line-height: 18px;
-}
-
-.report-section__factors {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid #eceef0;
-}
-
-.report-section--preview .report-section__factors strong {
-  color: #55585f;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.report-section__action {
-  margin-top: auto;
-  padding-top: 14px;
-  color: #31343a;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.detail-panel {
-  min-width: 0;
-}
-
-.detail-panel--highlighted {
-  animation: highlight 1.4s ease-out;
-}
-
-.detail-panel__back {
-  margin: 0 0 14px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #42454a;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.report-section--detail {
-  padding: 24px;
-}
-
-.report-section--detail .report-section__head h3 {
-  font-size: 24px;
-  line-height: 30px;
-}
-
-.report-section--detail .report-section__facts {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  padding: 14px;
-  border-radius: 10px;
-  background: #f6f7f8;
-}
-
-.detail-grid + .empty-detail {
-  margin-top: 14px;
-}
-
-/* ─────────── Чат: сообщения прокручиваются, composer всегда остаётся видимым ─────────── */
-
-.chat-panel {
-  top: 80px;
-  height: min(760px, calc(100vh - 96px));
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-color: #cfd2d6;
-  box-shadow: 0 4px 18px rgba(26, 29, 33, 0.06);
-}
-
-.chat-header {
-  flex: none;
-}
-
-.chat-header h2 {
-  margin: 0;
-}
-
-.chat-header small {
-  display: block;
-  margin-top: 2px;
-  color: #777a80;
-  font-size: 10px;
-}
-
-.chat-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.chat-suggestions {
-  flex: none;
-  max-height: 168px;
-  margin: 0;
-  overflow-y: auto;
-  border-top: 1px solid #e6e8eb;
-  background: #fafafa;
-}
-
-.chat-form {
-  flex: none;
-  margin: 0;
-  border-top: 1px solid #e0e2e5;
-  background: #fff;
-}
-
-.chat-form > :first-child {
-  min-width: 0;
-  flex: 1;
-}
-
-.answer-feedback {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  color: #74777d;
-  font-size: 10px;
-}
-
-.answer-feedback > button {
-  padding: 3px 5px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.answer-feedback > button[aria-pressed='true'] {
-  background: #dfe2e5;
-}
-
-.answer-feedback__reasons {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.answer-feedback__reasons button {
-  padding: 4px 7px;
-  border: 1px solid #d3d6da;
-  border-radius: 6px;
-  background: #fff;
-  color: #55585f;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.answer-feedback__reasons button[aria-pressed='true'] {
-  border-color: #777b82;
-  background: #eceef0;
-}
-
-/* ─────────── Компактные визуализации ─────────── */
-
-.report-chart {
-  margin: 18px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid #eceef0;
-}
-
-.report-chart__canvas {
-  height: 160px;
-}
-
-.report-chart--bars .report-chart__canvas {
-  height: 120px;
-}
-
-.report-chart text,
-.report-chart .recharts-text {
-  font-size: 11px;
-}
-
-.role-chart {
-  display: grid;
-  gap: 12px;
-  min-height: 80px;
-  padding: 8px 0 4px;
-}
-
-.role-chart__row > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.role-chart__row strong {
-  font-size: 14px;
-}
-
-.role-chart__track {
-  display: block;
-  height: 5px;
-  margin-top: 5px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: #ebecef;
-}
-
-.role-chart__track > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #758596;
 }

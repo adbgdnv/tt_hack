@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { IconButtonDesktop } from '@alfalab/core-components-icon-button/desktop';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
@@ -12,7 +12,13 @@ import { getCounterparty, getReport, searchCounterparties } from './api';
 import type { BlockKey, Counterparty, CounterpartyReport, HistoryItem, ReportBlock, ReportSectionData } from './types';
 import { BlockModal } from './components/BlockModal';
 import { Brand } from './components/Brand';
-import { ChatPanel } from './components/ChatPanel';
+// Отложенно: чат нужен только на экране компании, а тянет за собой разбор
+// разметки — 51 КБ в сжатии. На первом экране это чистый простой.
+// Ожидание срабатывает один раз при открытии компании, а не на каждое слово
+// ответа: разбиение по самой разметке дало бы мигание прямо во время печати.
+const ChatPanel = lazy(() =>
+  import('./components/ChatPanel').then((module) => ({ default: module.ChatPanel })),
+);
 import { ReportSection } from './components/ReportSection';
 
 const HISTORY_KEY = 'counterparty-check-history-v1';
@@ -348,7 +354,9 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
               )}
             </div>
           </section>
-          <ChatPanel report={report} onToast={onToast} />
+          <Suspense fallback={<aside className="chat-panel" aria-hidden="true" />}>
+            <ChatPanel report={report} onToast={onToast} />
+          </Suspense>
         </div>
       </main>
     </>
