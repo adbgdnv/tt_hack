@@ -24,7 +24,7 @@ description: "Task list template for feature implementation"
 
 ## Phase 1: Setup
 
-- [ ] T001 Разрешить заданиям писать пакеты: раздел `permissions`
+- [X] T001 Разрешить заданиям писать пакеты: раздел `permissions`
   в `.github/workflows/deploy.yml`. Без явного права вход в реестр проходит,
   а публикация упирается в отказ
 
@@ -34,15 +34,15 @@ description: "Task list template for feature implementation"
 
 **Зачем отдельной фазой**: пока образы не публикуются, выкатке нечего забирать.
 
-- [ ] T002 Задание `build` в `.github/workflows/deploy.yml`: два образа
+- [X] T002 Задание `build` в `.github/workflows/deploy.yml`: два образа
   параллельно, вход в реестр по временному токену задания
-- [ ] T003 Две метки на каждый образ в `.github/workflows/deploy.yml` — по коммиту
+- [X] T003 Две метки на каждый образ в `.github/workflows/deploy.yml` — по коммиту
   и «последний». Выкатка обязана ссылаться на метку коммита: «последний» всегда
   указывает на новое, и откат по нему невозможен
-- [ ] T004 Аргумент `VITE_API_BASE=/api` при сборке фронта в
+- [X] T004 Аргумент `VITE_API_BASE=/api` при сборке фронта в
   `.github/workflows/deploy.yml` — адрес вшивается в собранный файл, и без него
   фронт молча ходит в никуда
-- [ ] T005 Кэш слоёв в `.github/workflows/deploy.yml`: кэш поставщика как
+- [X] T005 Кэш слоёв в `.github/workflows/deploy.yml`: кэш поставщика как
   основной, метка «последний» как запасной
 
 **Checkpoint**: образы появляются в реестре, выкатка ещё собирает на сервере —
