@@ -74,6 +74,69 @@ SYSTEM_PROMPT = """Ты помогаешь предпринимателю раз
   вслух. Отчёт банка первичен, внешние источники его дополняют, а не исправляют."""
 
 
+# Статус приходит кодом схемы. В наборе он один — CURRENT у всех двухсот, —
+# но уходить в модель латиницей он не должен: она перескажет код пользователю,
+# а показывать коды схемы запрещено требованиями.
+_STATUS_WORDS = {
+    "CURRENT": "действующая",
+    "LIQUIDATING": "в процессе ликвидации",
+    "LIQUIDATED": "ликвидирована",
+    "BANKRUPT": "в процедуре банкротства",
+    "REORGANIZING": "в процессе реорганизации",
+}
+
+# Что сказать модели про каждый светофор. Направление шкалы объявляем явно,
+# а не значением: замерено на живом прогоне — из строки «Скоринг банка: Низкий»
+# модель вывела «низкий скоринг подтверждает высокий риск», перевернув смысл.
+# Шкалой, а не картой «значение → расшифровка», чтобы не дублировать здесь
+# словари `report._BANK_RISK` и `_ZSK_RISK` и не разойтись с ними.
+_BANK_SCALE = (
+    "внутренняя модель банка; шкала Низкий → Средний → Высокий, "
+    "«Низкий» значит меньше риска; методика не раскрывается"
+)
+_ZSK_SCALE = (
+    "оценка Банка России, а не банка; шкала Зелёный → Жёлтый → Красный, "
+    "«Зелёный» значит меньше риска"
+)
+
+
+def amount(value: float, unit: str = "₽") -> str:
+    """Число для модели: разряды пробелами и порядок словами.
+
+    Обязательно и то, и другое. Замерено на живом прогоне: из `2589790444.0`
+    модель вывела «≈ 2.59 млн ₽» — мантиссу взяла верно, порядок промахнула
+    в тысячу раз. Считать цифры в потоке токенов языковые модели не умеют,
+    и это наша задача, а не их.
+
+    Интерфейс форматирует суммы сам, компонентом дизайн-системы (см. `Fact`).
+    Здесь отдельная реализация не потому, что о ней забыли: у модели другой
+    потребитель и другие требования — ей нужен порядок словами, человеку на
+    экране он не нужен.
+    """
+    целое = int(round(value))
+    разряды = f"{целое:,}".replace(",", " ")
+    хвост = f" {unit}" if unit else ""
+    порядок = ""
+    if abs(целое) >= 1_000_000_000:
+        порядок = f" ({целое / 1_000_000_000:.2f} млрд)".replace(".", ",")
+    elif abs(целое) >= 1_000_000:
+        порядок = f" ({целое / 1_000_000:.1f} млн)".replace(".", ",")
+    return f"{разряды}{хвост}{порядок}"
+
+
+def _fact_value(fact) -> str:
+    """Значение факта для модели: деньги и счётчики с разрядами, статус словами.
+
+    Статус лежит в разделе ещё и фактом, не только в шапке. Переводим здесь,
+    а не в `report.py`: интерфейс переводит его сам (`ReportSection.tsx`),
+    и сырой код нужен ему как ключ. У модели ключей нет — ей нужен русский,
+    иначе она перескажет пользователю `CURRENT`.
+    """
+    if fact.kind in {"money", "count"} and isinstance(fact.value, int | float):
+        return amount(fact.value, "₽" if fact.kind == "money" else "")
+    return _STATUS_WORDS.get(str(fact.value), str(fact.value))
+
+
 _STATE_WORDS = {
     State.SIGNAL: "есть на что обратить внимание",
     State.FILLED: "данные есть, ничего не сработало",
@@ -92,17 +155,17 @@ def render_report(report: Report) -> str:
     lines = [
         f"Контрагент: {report.name}, ИНН {report.inn}",
         f"Форма: {форма}",
-        f"Статус: {report.status}",
+        f"Статус: {_STATUS_WORDS.get(report.status, report.status)}",
     ]
     if report.years is not None:
         lines.append(f"Лет с регистрации: {report.years}")
     lines.append(
-        f"{report.bank_risk.source}: {report.bank_risk.value}"
-        + ("" if report.bank_risk.known else " (оценка отсутствует, это не низкий риск)")
+        f"{report.bank_risk.source} ({_BANK_SCALE}): {report.bank_risk.value}"
+        + ("" if report.bank_risk.known else " — оценки нет, и это не низкий риск")
     )
     lines.append(
-        f"{report.zsk_risk.source}: {report.zsk_risk.value}"
-        + ("" if report.zsk_risk.known else " (оценка отсутствует)")
+        f"{report.zsk_risk.source} ({_ZSK_SCALE}): {report.zsk_risk.value}"
+        + ("" if report.zsk_risk.known else " — оценки нет")
     )
     lines.append("")
     lines.append("РАЗДЕЛЫ ОТЧЁТА:")
@@ -111,14 +174,14 @@ def render_report(report: Report) -> str:
         for factor in section.factors:
             lines.append(f"    • {factor.heading}. {factor.explanation}")
         for fact in section.facts:
-            lines.append(f"    {fact.label}: {fact.value}")
+            lines.append(f"    {fact.label}: {_fact_value(fact)}")
         # Ряды графиков идут в контекст теми же числами, что нарисованы на экране.
         # Иначе ответ про выручку разойдётся с графиком рядом, и проверить его
         # будет нельзя — а проверяемость и есть смысл продукта.
         for chart in section.charts:
             for ряд in chart.series:
                 значения = ", ".join(
-                    f"{label} {value}"
+                    f"{label} — {amount(value, ряд.unit)}"
                     for label, value in zip(chart.labels, ряд.values, strict=False)
                     if value is not None
                 )
