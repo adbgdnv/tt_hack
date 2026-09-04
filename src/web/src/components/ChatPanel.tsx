@@ -242,7 +242,10 @@ export function ChatPanel({ report, onToast }: {
   };
 
   return (
-    <aside className="chat-panel" aria-label="Чат об отчёте контрагента">
+    <aside
+      className={`chat-panel${messages.length === 0 ? ' chat-panel--empty' : ''}`}
+      aria-label="Чат об отчёте контрагента"
+    >
       <header className="chat-header">
         <div>
           <span className="ai-mark">AI</span>
@@ -335,6 +338,7 @@ export function ChatPanel({ report, onToast }: {
       </div>
 
       <div className="chat-suggestions" aria-label="Предложенные вопросы">
+        {messages.length === 0 && <span>С чего начать</span>}
         {questions.map((question) => (
           <button key={question} type="button" disabled={busy} onClick={() => void ask(question)}>
             {question}

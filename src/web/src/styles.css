@@ -539,6 +539,13 @@ input:focus-visible,
   font-size: 12px;
 }
 
+/* Сводка проверок рядом с вердиктом: «Выглядит чисто» без неё — три слова
+   на всю плашку, и непонятно, чисто по итогам чего. */
+.verdict__checks {
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
 .verdict__bullets {
   list-style: none;
   margin: 14px 0 0;
@@ -641,6 +648,7 @@ input:focus-visible,
 .report-sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 14px;
 }
 
@@ -668,6 +676,14 @@ button.report-section:hover {
 
 .report-section--wide {
   grid-column: span 2;
+}
+
+/* Раздел во всю ширину и список факторов в одну колонку оставляли половину
+   карточки пустой. Сработавших факторов там от трёх до четырёх — ровно две
+   строки по две колонки. */
+.report-section--wide .report-section__factors {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 24px;
 }
 
 .report-section--signal {
@@ -719,10 +735,21 @@ button.report-section:hover {
   line-height: 1.5;
 }
 
-.report-section__significance {
-  margin: 0 0 8px;
-  color: var(--ink-tertiary);
+.report-section__checks {
+  margin: 0 0 10px;
+  color: var(--ink-secondary);
   font-size: 12px;
+}
+
+.report-section__checks strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Все проверки пройдены — единственное место карточки, где зелёный означает
+   не «мы посмотрели», а «источник проверил и не нашёл». */
+.report-section__checks--clean strong {
+  color: var(--positive);
 }
 
 .report-section__note {
@@ -779,6 +806,47 @@ button.report-section:hover {
   padding-top: 10px;
   color: var(--ink);
   font-size: 12px;
+  font-weight: 600;
+}
+
+/* Пройденные проверки в детальном виде. Галочка нарисована псевдоэлементом,
+   а не значком: двадцать три строки — это двадцать три лишних узла разметки,
+   а смысл несёт сам факт списка. */
+.report-section__passed {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.report-section__passed h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.report-section__passed ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.report-section__passed li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-secondary);
+}
+
+.report-section__passed li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--positive);
   font-weight: 600;
 }
 
@@ -928,6 +996,19 @@ button.report-section:hover {
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
+}
+
+/* Пока разговора нет, панель занимает столько, сколько занимает. Растянутая
+   на весь экран пустая лента отрывала приветствие от подсказок третью экрана
+   пустоты и читалась как сломанный чат, а не как приглашение задать вопрос. */
+.chat-panel--empty {
+  height: auto;
+  min-height: 0;
+  grid-template-rows: auto auto auto auto;
+}
+
+.chat-panel--empty .chat-scroll {
+  padding-bottom: 4px;
 }
 
 .chat-header {
@@ -1300,8 +1381,20 @@ button.report-section:hover {
 .role-chart__track > span {
   display: block;
   height: 100%;
-  background: var(--negative);
+  background: #64788a;
   border-radius: 4px;
+}
+
+/* Красным — только строка произошедшего: суммы к компании как к ответчику,
+   действующие производства, отрицательный собственный капитал. Раньше красными
+   были все полосы подряд, включая обязательства в балансе, — цвет тревоги
+   стоял там, где тревоги нет, и переставал что-либо значить. */
+.role-chart__row--accent .role-chart__track > span {
+  background: var(--negative);
+}
+
+.role-chart__row--accent strong {
+  color: var(--negative);
 }
 
 /* Значения текстом: на печати нет наведения мышью, и график без подписей
@@ -1331,4 +1424,71 @@ button.report-section:hover {
   margin: 4px 0 0;
   font-size: 11px;
   color: var(--ink-tertiary);
+}
+
+/* ── График в карточке раздела ── */
+
+.report-chart--compact {
+  margin: 10px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.report-chart--compact .report-chart__title {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-secondary);
+  margin-bottom: 8px;
+}
+
+.report-chart--compact .role-chart {
+  gap: 8px;
+}
+
+.report-chart--compact .role-chart__row > div {
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.report-chart--compact .report-chart__values {
+  font-size: 11px;
+}
+
+/* Ряд по годам в карточке. Своя разметка вместо библиотеки: восемь
+   прямоугольников не стоят обработчиков мыши внутри кнопки. */
+.mini-columns {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 68px;
+}
+
+.mini-columns__group {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+  height: 100%;
+  min-width: 0;
+}
+
+.mini-columns__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 100%;
+}
+
+.mini-columns__bar {
+  flex: 1 1 0;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+}
+
+.mini-columns__label {
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  text-align: center;
+  white-space: nowrap;
 }

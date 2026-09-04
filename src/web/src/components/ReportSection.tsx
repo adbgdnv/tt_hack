@@ -26,12 +26,37 @@ export const STATE_LABEL: Record<SectionState, string> = {
   not_applicable: 'Не применимо',
 };
 
-const SIGNIFICANCE_LABEL: Record<SectionState, string> = {
-  signal: 'Повышенная значимость · негативное направление',
-  filled: 'Нейтральная значимость',
-  empty: 'Значимость не оценена',
-  not_applicable: 'Оценка не применяется',
-};
+/**
+ * Сколько проверок раздела компания прошла.
+ *
+ * Заменила строку «Нейтральная значимость · негативное направление»: та
+ * повторяла бейдж состояния другими словами и стояла на каждой карточке, ничего
+ * не добавляя. Счётчик отвечает на вопрос, который бейдж оставлял открытым, —
+ * данных нет или данные есть и всё чисто.
+ *
+ * Раздел без единой проверки честно говорит об этом словами, а не молчанием:
+ * пустая строка читается как «мы не показали», а не «источник не смотрел».
+ */
+function Checks({ section }: { section: ReportSectionData }) {
+  const passed = section.checks_passed;
+  const total = section.checks_total;
+
+  // Раздел собран на клиенте: про проверки неизвестно ничего, и молчание здесь
+  // честнее любой формулировки.
+  if (passed === undefined || total === undefined) return null;
+
+  if (total > 0) {
+    return (
+      <p className={`report-section__checks${passed === total ? ' report-section__checks--clean' : ''}`}>
+        Пройдено проверок <strong>{passed} из {total}</strong>
+      </p>
+    );
+  }
+  if (section.state === 'empty') {
+    return <p className="report-section__checks">Источник этот раздел не проверял</p>;
+  }
+  return null;
+}
 
 /** Что входит в раздел — коротко, для детального вида (ux_design.md, «Description»). */
 const SECTION_DESCRIPTION: Record<string, string> = {
@@ -142,6 +167,7 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
   const factors = section.factors ?? [];
   const facts = section.facts ?? [];
   const charts = section.charts ?? [];
+  const passed = section.passed_checks ?? [];
   const note = sectionNote(section);
   const preview = mode === 'preview';
   // Раздел с несколькими сработавшими факторами занимает всю ширину сетки —
@@ -162,7 +188,7 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
       {!preview && SECTION_DESCRIPTION[section.key] && (
         <p className="report-section__description">{SECTION_DESCRIPTION[section.key]}</p>
       )}
-      <p className="report-section__significance">{SIGNIFICANCE_LABEL[section.state]}</p>
+      <Checks section={section} />
       {note && <p className="report-section__note">{note}</p>}
 
       <Facts facts={preview ? facts.slice(0, 2) : facts} />
@@ -178,6 +204,21 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
         </ul>
       )}
 
+      {/* Что именно проверено — только в детальном виде. На карточке этот список
+          вытеснил бы всё остальное: у «Реестров» его длина доходит до девяти
+          строк, а сигналов там от силы четыре. */}
+      {!preview && passed.length > 0 && (
+        <div className="report-section__passed">
+          <h4>Пройденные проверки</h4>
+          <ul>
+            {passed.map((label) => (
+              <li key={label}>{label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {preview && charts[0] && <ReportChart spec={charts[0]} compact />}
       {!preview && charts.map((chart) => <ReportChart key={chart.key} spec={chart} />)}
       {!preview && section.charts_note && (
         <p className="report-section__chart-note">{section.charts_note}</p>

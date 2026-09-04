@@ -14,6 +14,9 @@ export type Verdict = {
   bullets: VerdictBullet[];
   /** Заполнено, когда пробелов в разделах достаточно, чтобы вывод считался неполным. */
   coverageNote: string;
+  /** Сводка проверок по всем разделам — на чём вывод основан. Пусто, когда
+   *  разделы про проверки ничего не знают (отчёт собран на клиенте). */
+  checksNote: string;
 };
 
 const LABEL: Record<VerdictLevel, string> = {
@@ -51,18 +54,28 @@ export function deriveVerdict(sections: ReportSectionData[]): Verdict {
       text: section.factors[0]?.explanation || section.note,
     }));
 
+  // Сводка проверок. Считаем только разделы, где проверки вообще были: иначе
+  // знаменатель молча занижался бы разделами, которые источник не проверяет.
+  const checked = applicable.filter((section) => (section.checks_total ?? 0) > 0);
+  const passedChecks = checked.reduce((sum, section) => sum + (section.checks_passed ?? 0), 0);
+  const totalChecks = checked.reduce((sum, section) => sum + (section.checks_total ?? 0), 0);
+  // Двоеточие вместо согласования: «Проверок пройдено: 1 из 1» и «16 из 16»
+  // читаются одинаково, а «пройдена 1 проверка» потребовало бы склонений
+  // ради строки, которую всё равно читают как число.
+  const checksNote = totalChecks > 0 ? `Проверок пройдено: ${passedChecks} из ${totalChecks}` : '';
+
   const emptyCount = applicable.filter((section) => section.state === 'empty').length;
   const coverageNote = applicable.length > 0 && emptyCount >= Math.max(2, Math.ceil(applicable.length / 2))
     ? `Из ${emptyCount} разделов не хватает данных — вывод неполный.`
     : '';
 
   if (signalSections.length === 0) {
-    return { level: 'clean', label: LABEL.clean, bullets: [], coverageNote };
+    return { level: 'clean', label: LABEL.clean, bullets: [], coverageNote, checksNote };
   }
 
   const heavy = signalSections.some((section) => maxWeight(section) >= 3);
   if (heavy || signalSections.length >= 2) {
-    return { level: 'attention', label: LABEL.attention, bullets, coverageNote };
+    return { level: 'attention', label: LABEL.attention, bullets, coverageNote, checksNote };
   }
-  return { level: 'clarify', label: LABEL.clarify, bullets, coverageNote };
+  return { level: 'clarify', label: LABEL.clarify, bullets, coverageNote, checksNote };
 }

@@ -226,3 +226,112 @@ def test_ручка_отвечает_404_на_отсутствующий_инн(
         response = client.get("/counterparties/0000000000/report")
         assert response.status_code == 404
         assert response.json()["detail"] == "Компания не найдена"
+
+
+# ─────────────────────────── пройденные проверки ───────────────────────────
+
+
+def test_подтверждение_источника_выводит_раздел_из_пустоты():
+    """Раздел без собственных чисел, но с пройденной проверкой — не «данных нет».
+
+    Ровно на этом ломались «Реестры»: своих фактов у них не бывает вовсе,
+    поэтому раздел всегда падал в EMPTY, хотя источник его проверил.
+    """
+    record = запись(
+        reputationalRisks={
+            "negative": [],
+            "positive": [{"code": "liquidationStatus", "chapter": "reestrs", "name": "Не найден"}],
+        }
+    )
+
+    реестры = next(s for s in build(record).sections if s.key == "registries")
+
+    assert реестры.state is State.FILLED
+    assert (реестры.checks_passed, реестры.checks_total) == (1, 1)
+
+
+def test_знаменатель_считает_и_сработавшие_факторы():
+    """«4 из 8» сообщает больше, чем четыре сигнала без знаменателя: видно,
+    что половину проверок компания прошла."""
+    record = запись(
+        reputationalRisks={
+            "negative": [{"code": "massAddress", "chapter": "reestrs", "name": "Массовый адрес"}],
+            "positive": [
+                {"code": "taxArrears", "chapter": "reestrs", "name": "Не найден"},
+                {"code": "dishonestProvider", "chapter": "reestrs", "name": "Не найден"},
+            ],
+        }
+    )
+
+    реестры = next(s for s in build(record).sections if s.key == "registries")
+
+    assert реестры.state is State.SIGNAL
+    assert (реестры.checks_passed, реестры.checks_total) == (2, 3)
+
+
+def test_неприменимый_раздел_проверок_не_показывает():
+    """У ИП отчётности не бывает — «0 из 0» честнее любого счётчика."""
+    record = запись(
+        baseInfo={"inn": "500100200300", "shortName": "ИП ИВАНОВ И. И."},
+        reputationalRisks={
+            "negative": [],
+            "positive": [{"code": "profit", "chapter": "finance", "name": "Прибыль"}],
+        },
+    )
+
+    финансы = next(s for s in build(record).sections if s.key == "finances")
+
+    assert финансы.state is State.NOT_APPLICABLE
+    assert (финансы.checks_passed, финансы.checks_total) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    ("текст", "ожидание"),
+    [
+        # Название и объяснение источник разделяет запятой…
+        (
+            "Не найден в реестре организаций должников ФНС, что может свидетельствовать "
+            "об отсутствии задолженности перед бюджетом",
+            "Не найден в реестре организаций должников ФНС",
+        ),
+        # …тире…
+        (
+            "У компании есть действующие лицензии - компания имеет право осуществлять "
+            "определенные виды деятельности",
+            "У компании есть действующие лицензии",
+        ),
+        # …или точкой.
+        ("Есть выигранные госконтракты. Изучите информацию", "Есть выигранные госконтракты"),
+        # Точка внутри числа разделителем не является: «121259.0 тыс» должно уцелеть.
+        (
+            "У компании имеются оборотные активы в размере 121259.0 тыс",
+            "У компании имеются оборотные активы в размере 121259.0 тыс",
+        ),
+    ],
+)
+def test_название_проверки_это_первая_фраза(текст, ожидание):
+    from core.report import _check_label
+
+    assert _check_label(текст) == ожидание
+
+
+@нужен_набор
+def test_все_подтверждения_дают_непустое_название():
+    """Пустое название вылетело бы из списка молча, и «8 из 8» разошлось бы
+    с числом строк под ним."""
+    from core.report import _check_label
+
+    for record in _RECORDS:
+        for raw in (record.get("reputationalRisks") or {}).get("positive") or []:
+            assert _check_label(str(raw.get("name") or ""))
+
+
+@нужен_набор
+def test_реестры_проверены_у_всех_двухсот():
+    """Главная находка: источник проверяет реестры у каждой компании — от четырёх
+    проверок до девяти. Пока раздел это игнорировал, 157 компаний из 200 видели
+    «Недостаточно данных» там, где данные были и говорили «чисто»."""
+    for record in _RECORDS:
+        реестры = next(s for s in build(record).sections if s.key == "registries")
+        assert реестры.checks_total >= 4
+        assert реестры.state is not State.EMPTY

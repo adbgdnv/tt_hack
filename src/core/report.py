@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -129,6 +130,20 @@ class Section:
     charts: tuple[ChartSpec, ...] = ()
     # Почему графика нет. Пусто, когда график есть или когда его тут и не бывает.
     charts_note: str = ""
+    # Сколько проверок по разделу провёл источник и сколько из них компания прошла.
+    #
+    # Без этой пары «проверено, чисто» неотличимо от «мы не смотрели», и раздел
+    # молча съезжает в «данных нет». Так и было: реестры проверены у всех 200
+    # компаний — от 4 до 9 проверок на каждую, — а 157 из них показывали
+    # «Недостаточно данных». Источник прямо пишет «Не найден в реестре
+    # организаций проходящих процедуру банкротства»; выдавать это за незнание
+    # значит пугать пользователя там, где данные его успокаивают.
+    checks_passed: int = 0
+    checks_total: int = 0
+    # Названия пройденных проверок — для детального вида. На карточке их место
+    # занимает счётчик: двадцать три подтверждения списком это ровно тот шум,
+    # против которого продукт и сделан.
+    passed_checks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -276,12 +291,50 @@ def _collect_factors(record: dict) -> tuple[dict[str, list[Factor]], tuple[str, 
     return by_section, tuple(unknown)
 
 
-def _state(key: str, factors: list[Factor], facts: tuple[Fact, ...], entrepreneur: bool) -> State:
+# Название проверки от объяснения, зачем её знать, источник отделяет запятой,
+# точкой или тире: «Не найден в реестре организаций должников ФНС, что может
+# свидетельствовать об отсутствии задолженности...». Нужна первая часть.
+_CLAUSE = re.compile(r"[,.]\s|\s[-–—]\s")
+
+
+def _check_label(name: str) -> str:
+    """Название пройденной проверки — первая фраза подтверждения, дословно.
+
+    Своя редактура здесь исказила бы смысл: «не найден в реестре» и «в реестре
+    не значится» юридически не одно и то же, а отвечаем мы только за то, что
+    сказал источник.
+    """
+    return _CLAUSE.split(name.strip(), 1)[0].strip(" .,-–—")
+
+
+def _collect_checks(record: dict) -> dict[str, list[str]]:
+    """Какие проверки раздел прошёл — по позитивным подтверждениям источника.
+
+    На карточке от этого списка остаётся одно число: позитивных факторов 3 122
+    на 200 компаний против 217 негативных, и выписать их значит утопить сигнал
+    в подтверждениях того, что ничего не случилось. Но иметь их надо: без них
+    «проверено, чисто» неотличимо от «мы не смотрели».
+    """
+    passed: dict[str, list[str]] = {key: [] for key in SECTION_TITLES}
+    positive = (record.get("reputationalRisks") or {}).get("positive") or []
+    for raw in positive:
+        chapter = str(raw.get("chapter") or "")
+        label = _check_label(str(raw.get("name") or ""))
+        if label:
+            passed[CHAPTER_TO_SECTION.get(chapter, FALLBACK_SECTION)].append(label)
+    return passed
+
+
+def _state(
+    key: str, factors: list[Factor], facts: tuple[Fact, ...], checks: int, entrepreneur: bool
+) -> State:
     if entrepreneur and key in NOT_APPLICABLE_FOR_ENTREPRENEUR:
         return State.NOT_APPLICABLE
     if factors:
         return State.SIGNAL
-    return State.FILLED if facts else State.EMPTY
+    # Пройденная проверка — такие же данные, как факт. Раздел без собственных
+    # чисел, но с подтверждениями источника, знает о компании достаточно.
+    return State.FILLED if facts or checks else State.EMPTY
 
 
 def _charts_note(key: str, state: State, charts: list[ChartSpec]) -> str:
@@ -298,6 +351,7 @@ def build(record: dict) -> Report:
     base = record.get("baseInfo") or {}
     entrepreneur = _is_entrepreneur(record)
     by_section, unknown = _collect_factors(record)
+    passed = _collect_checks(record)
 
     by_chart_section: dict[str, list[ChartSpec]] = {key: [] for key in SECTION_TITLES}
     for chart in build_charts(record):
@@ -307,7 +361,16 @@ def build(record: dict) -> Report:
     for key, title in SECTION_TITLES.items():
         factors = by_section[key]
         facts = _section_facts(record, key)
-        state = _state(key, factors, facts, entrepreneur)
+        state = _state(key, factors, facts, len(passed[key]), entrepreneur)
+        # Неприменимый раздел не проверялся: у ИП отчётности не бывает, и «0 из 0»
+        # там честнее любого счётчика.
+        applicable = state is not State.NOT_APPLICABLE
+        passed_checks = tuple(passed[key]) if applicable else ()
+        checks_passed = len(passed_checks)
+        # Сработавший фактор — это тоже проведённая проверка, просто непройденная.
+        # Поэтому знаменатель считает и их: «5 из 9» у компании с четырьмя
+        # сигналами в реестрах сообщает больше, чем одни только четыре сигнала.
+        checks_total = checks_passed + (len(factors) if applicable else 0)
         sections.append(
             Section(
                 key=key,
@@ -322,6 +385,9 @@ def build(record: dict) -> Report:
                     tuple(by_chart_section[key]) if state is not State.NOT_APPLICABLE else ()
                 ),
                 charts_note=_charts_note(key, state, by_chart_section[key]),
+                checks_passed=checks_passed,
+                checks_total=checks_total,
+                passed_checks=passed_checks,
             )
         )
 

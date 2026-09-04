@@ -61,4 +61,20 @@
   .report-chart__canvas {
     height: 150px;
   }
+
+  /* Полосы и столбики печатаются цветом. Без этого браузер выбрасывает заливку
+     как «фон», и от графика на бумаге остаются пустые дорожки: числа рядом
+     уцелели бы, но сравнение величин — это и есть график. */
+  .role-chart__track,
+  .role-chart__track > span,
+  .mini-columns__bar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Список пройденных проверок не отрывается от своего раздела. */
+  .report-section__passed {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

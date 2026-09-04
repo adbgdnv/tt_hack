@@ -18,6 +18,7 @@ export function VerdictBanner({ verdict, onOpenSection }: {
     <section className={`verdict ${LEVEL_CLASS[verdict.level]}`}>
       <div className="verdict__head">
         <h2>{verdict.label}</h2>
+        {verdict.checksNote && <span className="verdict__checks">{verdict.checksNote}</span>}
       </div>
 
       {verdict.bullets.length > 0 && (
