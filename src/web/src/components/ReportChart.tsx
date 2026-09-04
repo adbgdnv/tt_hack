@@ -10,7 +10,7 @@ import type { ChartSpec } from '../types';
  * не собирал его заново.
  */
 
-const PALETTE = ['#ef3124', '#0d1f2c', '#d58c00', '#2a8c4a'];
+const PALETTE = ['#64788a', '#9a7761', '#8c8f95', '#708775'];
 
 /** Крупные суммы нечитаемы целиком: 279 815 832 000 ₽ на оси не помещается. */
 function short(value: number, unit: string): string {
@@ -22,8 +22,37 @@ function short(value: number, unit: string): string {
   return String(Math.round(value));
 }
 
+function full(value: number, unit: string): string {
+  const formatted = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
 export function ReportChart({ spec }: { spec: ChartSpec }) {
   const unit = spec.series[0]?.unit ?? '';
+
+  if (spec.key === 'plaintiff_defendant' && spec.series[0]) {
+    const values = spec.series[0].values;
+    const max = Math.max(...values.map((value) => value ?? 0), 1);
+    return (
+      <figure className="report-chart report-chart--roles" aria-label={spec.title}>
+        <figcaption className="report-chart__title">{spec.title}</figcaption>
+        <div className="role-chart">
+          {spec.labels.map((label, index) => {
+            const value = values[index] ?? 0;
+            return (
+              <div className="role-chart__row" key={label}>
+                <div><span>{label}</span><strong>{full(value, unit)}</strong></div>
+                <span className="role-chart__track" aria-hidden="true">
+                  <span style={{ width: `${Math.max((value / max) * 100, value > 0 ? 3 : 0)}%` }} />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="report-chart__source">Источник: {spec.source}</p>
+      </figure>
+    );
+  }
 
   const series = spec.series.map((s, index) => ({
     chart: (spec.form === 'lines' ? 'line' : 'bar') as 'line' | 'bar',
@@ -43,7 +72,7 @@ export function ReportChart({ spec }: { spec: ChartSpec }) {
   }));
 
   return (
-    <figure className="report-chart" aria-label={spec.title}>
+    <figure className={`report-chart report-chart--${spec.form}`} aria-label={spec.title}>
       <figcaption className="report-chart__title">{spec.title}</figcaption>
       <div className="report-chart__canvas">
         <Chart

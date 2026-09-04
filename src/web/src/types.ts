@@ -94,7 +94,7 @@ export type ReportSectionData = {
   key: string;
   title: string;
   state: SectionState;
-  /** Человеческая формулировка состояния — готовая, придумывать не надо. */
+  /** Формулировка сервера; UI может заменить её на согласованный продуктовый текст. */
   note: string;
   factors: ReportFactor[];
   /** То, что пользователь может сверить с источником. */
@@ -122,7 +122,7 @@ export type CounterpartyReport = {
   years: number | null;
   bank_risk: RiskAssessment;
   zsk_risk: RiskAssessment;
-  /** Уже в правильном порядке: разделы с сигналом первыми. */
+  /** UI выводит разделы в постоянном порядке из UX-спеки. */
   sections: ReportSectionData[];
   unknown_chapters: string[];
   signals: number;

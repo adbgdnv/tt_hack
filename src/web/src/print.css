@@ -5,6 +5,7 @@
 @media print {
   .app-header,
   .back-link,
+  .detail-panel__back,
   .report-actions,
   .chat-panel,
   .compare-bar,

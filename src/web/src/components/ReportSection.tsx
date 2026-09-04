@@ -4,10 +4,6 @@ import { Status } from '@alfalab/core-components-status';
 import { ReportChart } from './ReportChart';
 import type { ReportFact, ReportSectionData, SectionState } from '../types';
 
-/**
- * Цвет состояния раздела. Пустой раздел серый, а не зелёный: «данных нет»
- * и «всё чисто» — разные утверждения, и путать их нельзя.
- */
 const STATE_COLOR: Record<SectionState, 'red' | 'green' | 'grey'> = {
   signal: 'red',
   filled: 'green',
@@ -15,74 +11,156 @@ const STATE_COLOR: Record<SectionState, 'red' | 'green' | 'grey'> = {
   not_applicable: 'grey',
 };
 
-const STATE_LABEL: Record<SectionState, string> = {
-  signal: 'Обратить внимание',
-  filled: 'Чисто',
-  empty: 'Нет данных',
+export const STATE_LABEL: Record<SectionState, string> = {
+  signal: 'Есть на что обратить внимание',
+  filled: 'Значимых сигналов нет',
+  empty: 'Недостаточно данных',
   not_applicable: 'Не применимо',
 };
 
-function FactValue({ fact }: { fact: ReportFact }) {
-  if (fact.kind === 'money' && typeof fact.value === 'number') {
-    // minority={1} — суммы приходят в целых рублях, а не в копейках
-    return <Amount value={fact.value} minority={1} currency="RUR" />;
-  }
-  return <span>{String(fact.value)}</span>;
+const SIGNIFICANCE_LABEL: Record<SectionState, string> = {
+  signal: 'Повышенная значимость · негативное направление',
+  filled: 'Нейтральная значимость',
+  empty: 'Значимость не оценена',
+  not_applicable: 'Оценка не применяется',
+};
+
+const RAW_VALUE_LABEL: Record<string, string> = {
+  CURRENT: 'Действующее',
+  ACTIVE: 'Действующее',
+  LIQUIDATED: 'Ликвидировано',
+  CLOSED: 'Закрыто',
+  BANKRUPT: 'В процедуре банкротства',
+};
+
+const FACTOR_EXPLANATION: Record<string, string> = {
+  massAddress: 'По этому адресу зарегистрировано много юрлиц — бывает у фиктивных фирм, стоит проверить фактическое присутствие.',
+  massOkved: 'Заявлено необычно много видов деятельности — размытая специализация, сложнее оценить профильность.',
+  arbitrationDefendant: 'К компании предъявляли требования в арбитраже — проверьте предметы и исходы дел до сделки.',
+  executionProceedings: 'Есть действующие взыскания — они могут влиять на доступные деньги и исполнение новых обязательств.',
+  fnsBlocking: 'Налоговая блокировала счета — уточните, сняты ли ограничения и доступны ли расчёты.',
+  profit: 'В отчётности отражён убыток — сопоставьте его с выручкой, долгами и условиями оплаты.',
+  invalidRegistrationData: 'Часть регистрационных сведений признана недостоверной — проверьте свежую выписку и полномочия подписанта.',
+  invalidAddress: 'Адрес отмечен как недостоверный — стоит подтвердить, где компания фактически работает и получает корреспонденцию.',
+  massAuthpersons: 'Руководитель или учредитель связан со многими компаниями — проверьте его реальную роль и полномочия.',
+  invalidAuthpersonsData: 'Сведения о руководителе вызывают сомнения — подтвердите личность и право подписывать договор.',
+  currentAssets: 'Оборотные активы равны нулю — у компании может не быть ресурсов для текущих расчётов.',
+  liquidationStatus: 'Есть процедура прекращения деятельности или банкротства — проверьте актуальный статус до заключения договора.',
+  dishonestProvider: 'Компания включалась в реестр недобросовестных поставщиков — уточните основание и срок записи.',
+  taxArrears: 'Есть задолженность перед налоговой — она может привести к взысканию и ограничениям по счетам.',
+  inspectionWithViolation: 'Проверки выявляли нарушения — важно понять их предмет, давность и устранены ли они.',
+};
+
+function displayValue(value: string | number): string | number {
+  if (typeof value !== 'string') return value;
+  return RAW_VALUE_LABEL[value.trim().toUpperCase()] ?? value;
 }
 
-export function ReportSection({ section }: { section: ReportSectionData }) {
+function FactValue({ fact }: { fact: ReportFact }) {
+  if (fact.kind === 'money' && typeof fact.value === 'number') {
+    // minority={1} — суммы приходят в целых рублях, а не в копейках.
+    return <Amount value={fact.value} minority={1} currency="RUR" />;
+  }
+  return <span>{String(displayValue(fact.value))}</span>;
+}
+
+function normalizeLabel(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/** Формулировки сервера, которые лишь повторяют «данных нет» и ничего не добавляют
+ *  к бейджу «Недостаточно данных» — для пустого раздела их не показываем (DBG-61D108F1FE). */
+const GENERIC_EMPTY_NOTES = new Set([
+  normalizeLabel('Данных нет — оценить по этому критерию невозможно'),
+  normalizeLabel('Нет данных'),
+  normalizeLabel('Данных недостаточно'),
+]);
+
+function sectionNote(section: ReportSectionData): string {
+  if (section.state === 'filled') return '';
+
+  const note = section.note.trim()
+    || (section.state === 'not_applicable' ? 'Раздел не применяется к этому типу контрагента.' : '');
+
+  const normalized = normalizeLabel(note);
+  if (normalized === normalizeLabel(STATE_LABEL[section.state])) return '';
+  if (section.state === 'empty' && GENERIC_EMPTY_NOTES.has(normalized)) return '';
+  return note;
+}
+
+function Facts({ facts }: { facts: ReportFact[] }) {
+  if (facts.length === 0) return null;
+  return (
+    <dl className="report-section__facts">
+      {facts.map((fact) => (
+        <div key={fact.label}>
+          <dt>{fact.label}</dt>
+          <dd><FactValue fact={fact} /></dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function ReportSection({ section, onOpen, mode = 'preview' }: {
+  section: ReportSectionData;
+  onOpen?: () => void;
+  mode?: 'preview' | 'detail';
+}) {
   const muted = section.state === 'empty' || section.state === 'not_applicable';
-  // Фронт выкатывается автоматически при пуше, бэкенд — вручную. Значит расхождение
-  // версий это обычное состояние между деплоями, а не редкий случай: сервер постарше
-  // просто не пришлёт поля, которых у него ещё нет. Пропущенное поле должно
-  // деградировать до пустого списка, а не ронять страницу в белый экран.
   const factors = section.factors ?? [];
   const facts = section.facts ?? [];
   const charts = section.charts ?? [];
-  return (
-    <section className={muted ? 'report-section report-section--muted' : 'report-section'}>
+  const note = sectionNote(section);
+  const preview = mode === 'preview';
+
+  const content = (
+    <>
       <header className="report-section__head">
         <h3>{section.title}</h3>
         <Status size={20} view="soft" color={STATE_COLOR[section.state]}>
           {STATE_LABEL[section.state]}
         </Status>
       </header>
+      <p className="report-section__significance">{SIGNIFICANCE_LABEL[section.state]}</p>
+      {note && <p className="report-section__note">{note}</p>}
 
-      {/* Формулировка состояния приходит с сервера готовой — придумывать не надо */}
-      <p className="report-section__note">{section.note}</p>
+      <Facts facts={preview ? facts.slice(0, 2) : facts} />
 
       {factors.length > 0 && (
         <ul className="report-section__factors">
-          {factors.map((factor) => (
+          {(preview ? factors.slice(0, 1) : factors).map((factor) => (
             <li key={factor.code}>
               <strong>{factor.heading}</strong>
-              {/* Текст из выгрузки кейсодателя, дословно */}
-              <p>{factor.explanation}</p>
+              {!preview && <p>{FACTOR_EXPLANATION[factor.code] ?? factor.explanation}</p>}
             </li>
           ))}
         </ul>
       )}
 
-      {/* Графики приходят готовыми: сервер уже решил, хватает ли данных.
-          Пустых рамок здесь быть не может по контракту. */}
-      {charts.map((chart) => (
-        <ReportChart key={chart.key} spec={chart} />
-      ))}
-
-      {/* Молчание там, где график ожидается, читается как поломка вёрстки.
-          Объяснение приходит с сервера готовым. */}
-      {section.charts_note && <p className="report-section__chart-note">{section.charts_note}</p>}
-
-      {facts.length > 0 && (
-        <dl className="report-section__facts">
-          {facts.map((fact) => (
-            <div key={fact.label}>
-              <dt>{fact.label}</dt>
-              <dd><FactValue fact={fact} /></dd>
-            </div>
-          ))}
-        </dl>
+      {!preview && charts.map((chart) => <ReportChart key={chart.key} spec={chart} />)}
+      {!preview && section.charts_note && (
+        <p className="report-section__chart-note">{section.charts_note}</p>
       )}
+      {preview && <span className="report-section__action">Подробнее <span aria-hidden="true">→</span></span>}
+    </>
+  );
+
+  if (preview) {
+    return (
+      <button
+        className={`report-section report-section--preview${muted ? ' report-section--muted' : ''}`}
+        type="button"
+        onClick={onOpen}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <section className={`report-section report-section--detail${muted ? ' report-section--muted' : ''}`}>
+      {content}
     </section>
   );
 }

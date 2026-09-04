@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
+import { IconButtonDesktop } from '@alfalab/core-components-icon-button/desktop';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
-import { TagDesktop as Tag } from '@alfalab/core-components-tag/desktop';
+import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
 
 import { streamChat } from '../api';
 import type { CounterpartyReport } from '../types';
@@ -26,18 +26,61 @@ type Message =
   /** Сбой сервиса — отдельная роль, а не ответ: путать их нельзя. */
   | { id: string; role: 'failure'; text: string };
 
-/**
- * Заготовленные вопросы собираются по состояниям разделов: спрашивать про суды
- * у компании без судебных дел бессмысленно.
- */
-function suggestions(report: CounterpartyReport | null): string[] {
-  if (!report) return ['Что настораживает в этой компании?'];
-  const signalled = report.sections.filter((s) => s.state === 'signal');
-  const questions = signalled.slice(0, 2).map((s) => `Что не так с разделом «${s.title}»?`);
+type FeedbackValue = { value: 'up' | 'down'; reason?: string };
+
+const FEEDBACK_REASONS = [
+  'Не отвечает на вопрос',
+  'Непонятно',
+  'Недостаточно данных',
+  'Обнаружена ошибка',
+  'Слишком много текста',
+  'Другое',
+];
+
+/** Пул шире видимых трёх вопросов: использованный вопрос сразу заменяется следующим. */
+function suggestionPool(report: CounterpartyReport | null): string[] {
+  if (!report) return ['Что можно проверить в отчёте?'];
+  const signalled = report.sections.filter((section) => section.state === 'signal');
+  const missing = report.sections.filter((section) => section.state === 'empty');
+  const questions = [
+    ...signalled.map((section) => `Какие факты важны в разделе «${section.title}»?`),
+    ...missing.map((section) => `Каких данных не хватает в разделе «${section.title}»?`),
+  ];
   if (report.signals === 0) questions.push('Что удалось проверить, а что нет?');
-  if (report.unknowns > 0) questions.push('Чего не хватает в отчёте?');
-  questions.push('Что стоит уточнить перед сделкой?');
-  return questions.slice(0, 3);
+  questions.push(
+    'Что стоит уточнить перед сделкой?',
+    'Какие документы запросить у контрагента?',
+    'Какие факты стоит перепроверить в первую очередь?',
+    'Что в отчёте не влияет на банковскую оценку?',
+  );
+  return [...new Set(questions)];
+}
+
+function AnswerFeedback({ value, onChange }: {
+  value?: FeedbackValue;
+  onChange: (next: FeedbackValue) => void;
+}) {
+  return (
+    <div className="answer-feedback">
+      <span>Ответ помог?</span>
+      <button type="button" aria-label="Ответ помог" aria-pressed={value?.value === 'up'} onClick={() => onChange({ value: 'up' })}>👍</button>
+      <button type="button" aria-label="Ответ не помог" aria-pressed={value?.value === 'down'} onClick={() => onChange({ value: 'down' })}>👎</button>
+      {value?.value === 'down' && (
+        <div className="answer-feedback__reasons" aria-label="Причина отрицательной оценки">
+          {FEEDBACK_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              aria-pressed={value.reason === reason}
+              onClick={() => onChange({ value: 'down', reason })}
+            >
+              {reason}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ChatPanel({ report, onToast }: {
@@ -47,11 +90,16 @@ export function ChatPanel({ report, onToast }: {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [askedQuestions, setAskedQuestions] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState<Record<string, FeedbackValue>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   // Брошенный поток на сервере продолжал бы тратить квоту, общую на всех.
   const abortRef = useRef<AbortController | null>(null);
   const sessionId = useMemo(() => `s-${Math.random().toString(36).slice(2)}`, []);
-  const questions = useMemo(() => suggestions(report), [report]);
+  const questions = useMemo(
+    () => suggestionPool(report).filter((question) => !askedQuestions.includes(question)).slice(0, 3),
+    [askedQuestions, report],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -63,6 +111,8 @@ export function ChatPanel({ report, onToast }: {
     abortRef.current?.abort();
     setMessages([]);
     setInput('');
+    setAskedQuestions([]);
+    setFeedback({});
   }, [report?.inn]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -71,6 +121,8 @@ export function ChatPanel({ report, onToast }: {
     const clean = question.trim();
     if (!clean || busy || !report) return;
     setInput('');
+    // Заданный вопрос убираем из подсказок и подставляем следующий из пула.
+    setAskedQuestions((current) => (current.includes(clean) ? current : [...current, clean]));
     const replyId = crypto.randomUUID();
     setMessages((current) => [
       ...current,
@@ -143,11 +195,11 @@ export function ChatPanel({ report, onToast }: {
   };
 
   return (
-    <aside className="chat-panel" aria-label="Диалог о контрагенте">
+    <aside className="chat-panel" aria-label="Чат об отчёте контрагента">
       <header className="chat-header">
         <div>
           <span className="ai-mark">AI</span>
-          <h2>Разбор отчёта</h2>
+          <div><h2>Чат по отчёту</h2><small>Задайте вопрос своими словами</small></div>
         </div>
         <span className="chat-memory">Память в этой сессии</span>
       </header>
@@ -220,11 +272,15 @@ export function ChatPanel({ report, onToast }: {
               {message.sections.length > 0 && (
                 <div className="agent-message__grounding">
                   {message.sections.map((key) => {
-                    const section = report?.sections.find((s) => s.key === key);
-                    return section ? <Tag key={key} size={32} view="muted">{section.title}</Tag> : null;
+                    const section = report?.sections.find((item) => item.key === key);
+                    return section ? <span className="static-label" key={key}>{section.title}</span> : null;
                   })}
                 </div>
               )}
+              <AnswerFeedback
+                value={feedback[message.id]}
+                onChange={(next) => setFeedback((current) => ({ ...current, [message.id]: next }))}
+              />
             </div>
           ),
         )}
@@ -238,9 +294,9 @@ export function ChatPanel({ report, onToast }: {
         )}
       </div>
 
-      <div className="chat-suggestions">
+      <div className="chat-suggestions" aria-label="Предложенные вопросы">
         {questions.map((question) => (
-          <button key={question} type="button" disabled={busy} onClick={() => ask(question)}>
+          <button key={question} type="button" disabled={busy} onClick={() => void ask(question)}>
             {question}
           </button>
         ))}
@@ -258,12 +314,20 @@ export function ChatPanel({ report, onToast }: {
           block
           value={input}
           disabled={busy || !report}
-          placeholder="Спросите об этой компании"
+          placeholder={report ? 'Напишите вопрос по отчёту' : 'Чат доступен с отчётом сервера'}
+          aria-label="Вопрос по отчёту"
           onChange={(_, { value }) => setInput(value)}
         />
-        <ButtonDesktop size={48} view="accent" type="submit" loading={busy} disabled={!report}>
-          Спросить
-        </ButtonDesktop>
+        <IconButtonDesktop
+          size={48}
+          view="primary"
+          type="submit"
+          icon={SendMIcon}
+          loading={busy}
+          disabled={!report || !input.trim()}
+          aria-label="Отправить вопрос"
+          title="Отправить вопрос"
+        />
       </form>
     </aside>
   );
