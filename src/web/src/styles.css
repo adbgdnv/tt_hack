@@ -124,16 +124,6 @@ input:focus-visible,
   font-weight: 700;
 }
 
-.app-header__prototype {
-  margin-left: 14px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--inset);
-  color: var(--ink-tertiary);
-  font-size: 11px;
-  font-weight: 600;
-}
-
 /* ─────────────────────────── Общие примитивы ─────────────────────────── */
 
 .static-label {
@@ -168,7 +158,6 @@ input:focus-visible,
 .company-header,
 .chat-panel,
 .history-card,
-.how-it-works,
 .source-lights {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -183,34 +172,30 @@ input:focus-visible,
 }
 
 .hero {
-  max-width: 720px;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
 }
 
 .hero h1 {
-  margin: 14px 0 12px;
-  font-size: 40px;
+  margin: 16px 0 14px;
+  font-size: 48px;
   line-height: 1.08;
   letter-spacing: -0.03em;
 }
 
 .hero > p {
-  max-width: 560px;
-  margin: 0;
+  max-width: 620px;
+  margin: 0 auto;
   color: var(--ink-secondary);
-  font-size: 17px;
-  line-height: 1.5;
-}
-
-.hero__note {
-  display: block;
-  margin-top: 8px;
-  color: var(--ink-tertiary);
-  font-size: 12px;
+  font-size: 18px;
+  line-height: 1.55;
 }
 
 .search {
   position: relative;
-  margin-top: 28px;
+  max-width: 640px;
+  margin: 28px auto 0;
   text-align: left;
   z-index: 4;
 }
@@ -302,12 +287,8 @@ input:focus-visible,
   color: var(--ink-secondary);
 }
 
-.home-columns {
+.history {
   margin-top: 56px;
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 20px;
-  align-items: start;
 }
 
 .section-heading {
@@ -360,35 +341,6 @@ input:focus-visible,
   margin-top: 16px;
   display: flex;
   justify-content: space-between;
-  color: var(--ink-secondary);
-  font-size: 12px;
-}
-
-.how-it-works {
-  padding: 22px 24px;
-}
-
-.how-it-works__steps {
-  display: grid;
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.how-it-works__steps > div {
-  display: flex;
-  gap: 12px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.how-it-works__steps b {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--inset);
   color: var(--ink-secondary);
   font-size: 12px;
 }
