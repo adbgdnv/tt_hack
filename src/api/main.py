@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from api import news
 from api.agent import loop
 from api.agent import tools as agent_tools
 from core import repo, slim
@@ -105,6 +106,26 @@ def get_report(inn: str) -> dict:
     if record is None:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     return _serialize(report_view.build(record))
+
+
+@app.get("/counterparties/{inn}/news")
+async def get_news(inn: str) -> dict:
+    """Новости о компании из внешних источников с оценкой каждой находки.
+
+    Отдельной ручкой, а не полем отчёта: отчёт собирается из набора мгновенно
+    и не должен ждать чужой сервер. Экран открывается на отчёте, новости
+    приезжают следом.
+
+    Без ключа поиска — 404, а не пустой список: пустой блок новостей читался бы
+    как «ничего не пишут», хотя мы просто не смотрели.
+    """
+    record = repo.by_inn(inn)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Компания не найдена")
+    if not news.enabled():
+        raise HTTPException(status_code=404, detail="Внешний поиск не настроен")
+    собранное = await news.collect(str((record.get("baseInfo") or {}).get("shortName") or ""), inn)
+    return asdict(собранное)
 
 
 @app.get("/counterparties/{inn}")

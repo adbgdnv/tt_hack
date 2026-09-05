@@ -201,9 +201,6 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
   const passed = section.passed_checks ?? [];
   const note = sectionNote(section);
   const preview = mode === 'preview';
-  // Раздел с несколькими сработавшими факторами занимает всю ширину сетки —
-  // ему действительно нужно больше места, а не потому что так решил порядок.
-  const wide = preview && factors.length >= 3;
 
   const content = (
     <>
@@ -226,7 +223,7 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
 
       {factors.length > 0 && (
         <ul className="report-section__factors">
-          {(preview ? factors.slice(0, wide ? 4 : 1) : factors).map((factor) => (
+          {(preview ? factors.slice(0, 4) : factors).map((factor) => (
             <li key={factor.code}>
               <strong>{factor.heading}</strong>
               {!preview && <p>{FACTOR_EXPLANATION[factor.code] ?? factor.explanation}</p>}
@@ -266,7 +263,7 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
     </>
   );
 
-  const className = `report-section report-section--${preview ? 'preview' : 'detail'} ${stateModifier(section.state)}${wide ? ' report-section--wide' : ''}`;
+  const className = `report-section report-section--${preview ? 'preview' : 'detail'} ${stateModifier(section.state)}`;
 
   if (preview) {
     return (

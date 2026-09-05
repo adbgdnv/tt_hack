@@ -1,6 +1,7 @@
 import { findFixtureByInn, searchFixtures } from './fixtures';
 import type {
   BlockKey,
+  CompanyNews,
   Counterparty,
   CounterpartyReport,
   ReportBlock,
@@ -234,6 +235,25 @@ export async function getReport(inn: string): Promise<CounterpartyReport | undef
   if (response.status === 404) return undefined;
   if (!response.ok) throw new Error('Не удалось загрузить отчёт');
   return normalizeReport(await response.json());
+}
+
+/**
+ * Новости о компании из внешних источников.
+ *
+ * Отдельным запросом, а не полем отчёта: конвейер ходит в чужой поиск и читает
+ * найденные страницы — замерено 10 секунд на первый заход. Отчёт собирается
+ * из набора мгновенно и ждать этого не должен.
+ *
+ * `undefined` означает «внешний поиск не настроен» — блока тогда нет вовсе.
+ * Сбой сети превращается в `failed`: «мы не смотрели» и «посмотрели, но
+ * не дозвонились» — разные сообщения, и второе нельзя выдавать за первое.
+ */
+export async function getNews(inn: string): Promise<CompanyNews | undefined> {
+  if (!apiBase) return undefined;
+  const response = await fetch(`${apiBase}/counterparties/${encodeURIComponent(inn)}/news`);
+  if (response.status === 404) return undefined;
+  if (!response.ok) return { items: [], level: '', failed: true, checked_at: 0 };
+  return (await response.json()) as CompanyNews;
 }
 
 /**

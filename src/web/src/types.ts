@@ -203,3 +203,27 @@ export type ToolCall = {
 export type MessageBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool'; call: ToolCall };
+
+
+// ─────────── Новости из внешних источников ───────────
+// Отдельный слой, а не часть отчёта: кейсодатель задал иерархию источников
+// дословно — найденное снаружи всегда со ссылкой и всегда отдельно от фактов
+// отчёта, смешивать их нельзя.
+
+export type NewsLevel = 'тревожная' | 'нейтральная' | '';
+
+export type NewsItem = {
+  title: string;
+  url: string;
+  /** Одна фраза словами источника. Оценку модель не добавляет. */
+  summary: string;
+  level: NewsLevel;
+};
+
+export type CompanyNews = {
+  items: NewsItem[];
+  level: NewsLevel;
+  /** Внешний источник не ответил. Это не то же самое, что «новостей нет». */
+  failed: boolean;
+  checked_at: number;
+};

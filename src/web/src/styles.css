@@ -643,14 +643,28 @@ input:focus-visible,
 
 /* ── Разделы отчёта: вычитание — сигнальные заметны, спокойные нейтральны ── */
 
+/* Две независимо текущие колонки, а не сетка.
+ *
+ * В сетке строка высотой с самую высокую карточку, а карточка с графиком выше
+ * карточки без него вдвое: 377 против 172 пикселей. Замерено — 259 пикселей
+ * пустоты на восьми разделах, 205 из них под одной карточкой. Обрезать нечего:
+ * график это 216 из 377, он такой по существу.
+ *
+ * Порядок разделов при этом остаётся постоянным — он обещан подсказкой «Порядок
+ * разделов постоянный» и не должен зависеть от того, у кого сколько графиков.
+ * Меняется только направление чтения: сверху вниз по колонке, а не слева направо.
+ */
 .report-sections {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 14px;
+  columns: 2;
+  column-gap: 14px;
 }
 
 .report-section {
+  /* Карточка не разрывается между колонками — половина фактов в одной колонке,
+     половина в другой читалась бы как две разные карточки. */
+  break-inside: avoid;
+  width: 100%;
+  margin-bottom: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--border-radius-16);
@@ -670,18 +684,6 @@ button.report-section {
 button.report-section:hover {
   border-color: var(--border-strong);
   box-shadow: 0 5px 16px rgba(26, 29, 33, 0.05);
-}
-
-.report-section--wide {
-  grid-column: span 2;
-}
-
-/* Раздел во всю ширину и список факторов в одну колонку оставляли половину
-   карточки пустой. Сработавших факторов там от трёх до четырёх — ровно две
-   строки по две колонки. */
-.report-section--wide .report-section__factors {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 24px;
 }
 
 .report-section--signal {
@@ -846,6 +848,74 @@ button.report-section:hover {
   font-size: 12px;
   font-style: italic;
   color: var(--ink-tertiary);
+}
+
+/* ── Новости из внешних источников ── */
+
+.news {
+  margin-top: 22px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-16);
+}
+
+.news__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+/* Оговорка стоит под самым заголовком, а не сноской внизу: иерархия источников
+   задана кейсодателем, и читать находки, не зная их веса, нельзя. */
+.news__note {
+  margin: 4px 0 0;
+  max-width: 60ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-tertiary);
+}
+
+.news__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.news__skeleton {
+  height: 52px;
+  border-radius: var(--border-radius-12);
+}
+
+.news__empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.news-item {
+  padding: 10px 14px;
+  border-radius: var(--border-radius-12);
+  background: var(--inset);
+  /* Полоса слева — тот же приём, что у карточек разделов: цвет несёт оценку,
+     а не значок рядом с текстом. */
+  border-left: 3px solid var(--neutral);
+}
+
+.news-item--alarming {
+  border-left-color: var(--negative);
+  background: var(--negative-bg);
+}
+
+.news-item__summary {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* ── Завершение проверки ── */

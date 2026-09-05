@@ -9,12 +9,13 @@ import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { Typography } from '@alfalab/core-components-typography';
 import { DocumentPdfMIcon } from '@alfalab/icons-glyph/DocumentPdfMIcon';
 import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
-import { getCounterparty, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
-import type { Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
+import { getCounterparty, getNews, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
+import type { CompanyNews, Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
 import { deriveVerdict } from './verdict';
 import { BlockModal } from './components/BlockModal';
 import { Brand } from './components/Brand';
 import { CompletionBar } from './components/CompletionBar';
+import { NewsBlock } from './components/NewsBlock';
 import { SourceLights } from './components/SourceLights';
 import { VerdictBanner } from './components/VerdictBanner';
 // Отложенно: чат нужен только на экране компании, а тянет за собой разбор
@@ -193,9 +194,10 @@ function headerFacts(sections: ReportSectionData[]) {
   return facts.filter((fact) => labels.test(fact.label)).map((fact) => ({ label: fact.label, value: String(fact.value) }));
 }
 
-function Dashboard({ company, report, openedSection, highlighted, onHome, onOpenBlock, onCloseBlock, onToast }: {
+function Dashboard({ company, report, news, openedSection, highlighted, onHome, onOpenBlock, onCloseBlock, onToast }: {
   company: Counterparty;
   report: CounterpartyReport | null;
+  news: CompanyNews | null | undefined;
   openedSection: string | null;
   highlighted: boolean;
   onHome: () => void;
@@ -312,6 +314,8 @@ function Dashboard({ company, report, openedSection, highlighted, onHome, onOpen
                     ))}
                   </div>
 
+                  <NewsBlock news={news} />
+
                   <CompletionBar onAnswer={() => onToast('Спасибо за отзыв')} />
                 </>
               )}
@@ -339,6 +343,9 @@ export default function App() {
   // Собранный отчёт с сервера. null означает «сервер недоступен» —
   // тогда разделы строятся из тех же данных, что уже есть у company.
   const [report, setReport] = useState<CounterpartyReport | null>(null);
+  // Три значения, а не два: null — ещё ищем, undefined — внешний поиск
+  // не настроен и блока быть не должно, объект — искали и вот что вышло.
+  const [news, setNews] = useState<CompanyNews | null | undefined>(null);
   const [history, setHistory] = useState<HistoryItem[]>(readHistory);
   const [modalBlock, setModalBlock] = useState<string | null>(null);
 
@@ -405,6 +412,12 @@ export default function App() {
       window.history.replaceState(null, '', `?inn=${encodeURIComponent(inn)}`);
       // Отчёт грузится отдельно: его отсутствие не должно ронять экран целиком.
       getReport(inn).then((r) => setReport(r ?? null)).catch(() => setReport(null));
+      // Новости — тем более отдельно: чужой поиск с чтением страниц занимает
+      // около десяти секунд, и экран не должен их ждать.
+      setNews(null);
+      getNews(inn)
+        .then(setNews)
+        .catch(() => setNews({ items: [], level: '', failed: true, checked_at: 0 }));
       const item: HistoryItem = { name: found.name, inn: found.inn, bankRisk: found.bankRisk, dataDate: found.dataDate };
       const nextHistory = [item, ...history.filter((entry) => entry.inn !== found.inn)].slice(0, 6);
       setHistory(nextHistory);
@@ -471,6 +484,7 @@ export default function App() {
         <Dashboard
           company={company}
           report={report}
+          news={news}
           openedSection={modalBlock}
           highlighted={highlighted}
           onHome={goHome}
