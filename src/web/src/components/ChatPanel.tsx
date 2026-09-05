@@ -441,14 +441,15 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
         )}
       </div>
 
-      {/* Подсказки нужны, пока разговор не начался. Дальше они отнимают
-          у ленты треть высоты ровно там, где идёт ответ. */}
+      {/* Подсказки нужны ровно до первого вопроса: они отвечают «с чего
+          начать». Дальше человек уже начал, а они отнимают у ленты треть
+          высоты ровно там, где идёт ответ. */}
       <div
         className="chat-suggestions"
         aria-label="Предложенные вопросы"
-        hidden={expanded && messages.length > 0}
+        hidden={messages.length > 0}
       >
-        {messages.length === 0 && <span>С чего начать</span>}
+        <span>С чего начать</span>
         {questions.map((question) => (
           <ButtonDesktop
             key={question}
