@@ -270,7 +270,14 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           schedule();
         } else if (event.name === 'lookup') {
           const call = lastCall();
-          if (call) call.lookup = event.data;
+          if (call) {
+            call.lookup = event.data;
+            // Тема дописывается в заголовок только здесь: в начале вызова
+            // аргументы приходят кусками и обычно ещё не разобраны, поэтому
+            // три запроса подряд выглядели тремя одинаковыми строками
+            // «Запросил данные».
+            call.title = `Запросил данные: ${event.data.topic}`;
+          }
           schedule();
         } else if (event.name === 'check') {
           const проверка = event.data;
@@ -376,7 +383,6 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
 
       <div
         className="chat-scroll"
-        hidden={!expanded}
         ref={scrollRef}
         onScroll={(event) => {
           const element = event.currentTarget;
@@ -391,13 +397,18 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
 
         {messages.map((message) =>
           message.role === 'user' ? (
-            <div className="user-message" key={message.id}>{message.text}</div>
+            // Строка-обёртка, а не выравнивание самого пузыря: колонка ленты
+            // задаёт каждому блоку свою ширину, и `align-self` на пузыре
+            // ничего не двигал — он занимал всю строку и текст оставался слева.
+            <div className="chat-row chat-row--user" key={message.id}>
+              <div className="user-message">{message.text}</div>
+            </div>
           ) : message.role === 'failure' ? (
             <div className="agent-message agent-message--failure" key={message.id} role="status">
               <strong>Не удалось получить разбор</strong>
               <p>{message.text} Это сбой сервиса, а не утверждение о компании — отчёт слева остаётся полным.</p>
             </div>
-          ) : (
+          ) : message.streaming && message.blocks.length === 0 ? null : (
             <div className="agent-message" key={message.id}>
               <span className="message-author">Ассистент</span>
 
@@ -446,10 +457,12 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
                 </div>
               )}
               {message.check && <AnswerCheckLine check={message.check} />}
-              <AnswerFeedback
-                value={feedback[message.id]}
-                onChange={(next) => setFeedback((current) => ({ ...current, [message.id]: next }))}
-              />
+              {!message.streaming && (
+                <AnswerFeedback
+                  value={feedback[message.id]}
+                  onChange={(next) => setFeedback((current) => ({ ...current, [message.id]: next }))}
+                />
+              )}
             </div>
           ),
         )}

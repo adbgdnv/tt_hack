@@ -1207,6 +1207,13 @@ button.report-section:hover {
 
    Свёрнутая высота не задаётся числом: её задаёт содержимое — шапка,
    подсказки и поле. Число разъехалось бы с ними при первой же правке. */
+/* Свёрнутый разбор показывает столько разговора, сколько помещается,
+   а не прячет его целиком: спрятанная лента заставляла разворачивать
+   панель ради одной строки ответа. */
+.chat-band:not(.chat-band--open) .chat-scroll {
+  max-height: 40vh;
+}
+
 .chat-band {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -1350,23 +1357,39 @@ button.report-section:hover {
   padding: 16px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
 }
 
-.agent-message,
+/* Реплика пользователя — пузырь справа, ответ ассистента — текст на полосе
+   без подложки. Так устроен любой диалог, который человек уже видел, и так
+   видно, кто говорит, без чтения подписи. Раньше обе реплики были одинаковыми
+   серыми блоками слева, и разговор читался как один длинный монолог.
+
+   Срезанный угол у пузыря — со стороны говорящего: он указывает на автора. */
+.chat-row--user {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .user-message {
+  max-width: 85%;
   margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: var(--border-radius-12);
+  padding: 11px 14px;
+  border-radius: var(--border-radius-16) var(--border-radius-16)
+    var(--border-radius-4) var(--border-radius-16);
+  background: var(--dark);
+  color: #fff;
   font-size: 13px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .agent-message {
-  background: var(--inset);
-}
-
-.agent-message--summary {
-  background: var(--inset);
+  align-self: stretch;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .agent-message p {
@@ -1384,12 +1407,6 @@ button.report-section:hover {
   margin-top: 10px;
   color: var(--ink-tertiary);
   font-size: 11px;
-}
-
-.user-message {
-  margin-left: 36px;
-  background: var(--dark);
-  color: #fff;
 }
 
 .chat-suggestions {
