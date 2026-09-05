@@ -138,14 +138,14 @@ jobs:
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
-          # Ключей три: именной у каждого провайдера плюс общий для совместимости.
-          # Хватает любого — без ключей писать .env бессмысленно, сервис не поднимется.
-          if [ -z "${OPENROUTER_API_KEY}${GROQ_API_KEY}${LLM_API_KEY}" ]; then
+          # Ключ у каждого провайдера свой, общего больше нет: в общем лежал ключ
+          # Groq, и пропажа именного ключа OpenRouter молча переводила продукт
+          # на gpt-oss. Хватает любого — без ключей .env писать бессмысленно.
+          if [ -z "${OPENROUTER_API_KEY}${GROQ_API_KEY}" ]; then
             echo "ни одного ключа модели не задано — пропускаю"; exit 0
           fi
           # Ключ уходит через stdin, а не аргументом: аргументы видны в ps на сервере.
@@ -162,7 +162,6 @@ jobs:
             "LLM_PROVIDER=${LLM_PROVIDER:-openrouter}" \
             "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" \
             "GROQ_API_KEY=${GROQ_API_KEY}" \
-            "LLM_API_KEY=${LLM_API_KEY}" \
             "${TRACING_LINES}" \
             "LANGSMITH_API_KEY=${LANGSMITH_API_KEY}" \
             "LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-counterparty-checker}" \
