@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from api import news
 from api.agent import loop
 from api.agent import tools as agent_tools
+from core import compare as compare_view
 from core import repo, slim
 from core import report as report_view
 
@@ -52,6 +53,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class CompareRequest(BaseModel):
+    """Пул контрагентов для сравнения. Ничего кроме списка ИНН: критерий
+    сравнения задан продуктом, а не запросом."""
+
+    inns: list[str]
 
 
 class ChatRequest(BaseModel):
@@ -143,6 +151,30 @@ def get_counterparty(inn: str) -> dict:
     if report is None:
         raise HTTPException(status_code=404, detail="Компания не найдена")
     return slim.slim(report)
+
+
+@app.post("/compare")
+async def compare(request: CompareRequest) -> dict:
+    """Сравнение нескольких контрагентов: вердикты и вывод словами.
+
+    Модель не участвует — всё считается тем же кодом, что и отчёт. Поэтому
+    экран сравнения открывается сразу и переживает недоступность провайдера,
+    а вердикт по одной компании звучит одинаково здесь и в её отчёте.
+
+    Неизвестный ИНН не роняет запрос: он называется отдельным полем. Молча
+    выбросить компанию из пула значит соврать о составе сравнения.
+    """
+    записи, ненайденные = [], []
+    for inn in dict.fromkeys(request.inns):  # порядок сохраняем, дубли убираем
+        запись = repo.by_inn(inn)
+        (записи if запись is not None else ненайденные).append(запись or inn)
+
+    вердикты = compare_view.compare(записи)
+    return {
+        "verdicts": [asdict(в) for в in вердикты],
+        "summary": asdict(compare_view.summary(вердикты)),
+        "not_found": ненайденные,
+    }
 
 
 @app.post("/chat/stream")

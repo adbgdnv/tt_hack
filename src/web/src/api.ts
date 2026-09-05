@@ -3,6 +3,7 @@ import type {
   AnswerCheck,
   BlockKey,
   CompanyNews,
+  CompareResult,
   Counterparty,
   CounterpartyReport,
   ReportBlock,
@@ -313,6 +314,24 @@ export async function askAboutCounterparty(
     throw new Error(detail?.detail ?? 'Сервис разбора сейчас недоступен');
   }
   return (await response.json()) as ChatReply;
+}
+
+/**
+ * Сравнение пула контрагентов.
+ *
+ * Порядок и вывод приходят с сервера готовыми: «сверху тот, к кому меньше
+ * вопросов» — утверждение о компаниях, и клиент, отсортировавший иначе,
+ * сделал бы его неверным.
+ */
+export async function compareCounterparties(inns: string[]): Promise<CompareResult> {
+  if (!apiBase) throw new Error('Сравнение доступно с отчётом сервера');
+  const response = await fetch(`${apiBase}/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inns }),
+  });
+  if (!response.ok) throw new Error('Не удалось сравнить контрагентов');
+  return (await response.json()) as CompareResult;
 }
 
 /** Событие потока ответа. Контракт — specs/006-chat-agent-tools/contracts/stream.md. */

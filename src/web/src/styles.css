@@ -573,13 +573,8 @@ input:focus-visible,
 .verdict--clarify .verdict__dot { background: var(--attention); }
 
 .verdict__bullets button {
-  border: 0;
-  background: transparent;
-  padding: 0;
   color: var(--link);
-  font: inherit;
   font-weight: 600;
-  cursor: pointer;
   white-space: nowrap;
 }
 
@@ -949,8 +944,15 @@ button.report-section:hover {
 
 /* Ссылка внутри карточки — это кнопка по разметке (открывает раздел, а не
    переходит по адресу), и браузер рисует ей рамку и фон. Снимаем: ведёт она
-   себя как ссылка, значит и выглядеть должна ссылкой. */
-.trigger button {
+   себя как ссылка, значит и выглядеть должна ссылкой.
+
+   Одним правилом на все карточки: это третье место с той же ссылкой,
+   и три копии сброса разошлись бы — что и случилось, пока сравнение
+   рисовало кнопки с рамкой рядом с теми же ссылками без неё. */
+.trigger button,
+.verdict__bullets button,
+.verdict-card__reasons button,
+.verdict-card__aside button {
   padding: 0;
   border: none;
   background: none;
@@ -1759,3 +1761,185 @@ button.report-section:hover {
   flex: none;
 }
 
+
+/* ─────────────────────── Сравнение контрагентов ─────────────────────── */
+
+/* Два режима вместо подписи: «Проверка контрагента» была текстом, а стала
+   выбором между проверкой одного и сравнением нескольких. */
+.app-header__modes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-strong);
+}
+
+.mode {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--border-radius-8);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mode:hover { background: var(--inset); color: var(--ink); }
+.mode--on { background: var(--dark); color: #fff; }
+.mode--on:hover { background: var(--dark); color: #fff; }
+
+.compare-page {
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pool {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-16);
+}
+
+.pool__items {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.pool__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 6px 0 12px;
+  border-radius: var(--border-radius-8);
+  background: var(--inset);
+  font-size: 13px;
+}
+
+/* ИНН, которого нет в наборе, остаётся на виду: молча выбросить компанию
+   из пула значит соврать о составе сравнения. */
+.pool__chip--missing {
+  background: var(--negative-bg);
+  color: var(--negative);
+}
+
+.pool__name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pool__remove {
+  border: 0;
+  background: transparent;
+  color: var(--ink-tertiary);
+  font-size: 17px;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.pool__remove:hover { color: var(--ink); }
+
+.pool__add { display: flex; align-items: center; gap: 8px; flex: none; width: 320px; }
+
+.compare { display: flex; flex-direction: column; gap: 16px; }
+
+.compare__summary {
+  padding: 20px 24px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--neutral);
+  border-radius: var(--border-radius-16);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compare__summary--clean { border-left-color: var(--positive); }
+.compare__summary--clarify { border-left-color: var(--attention); }
+.compare__summary--attention { border-left-color: var(--negative); }
+
+.compare__detail { margin: 0; font-size: 14px; line-height: 1.55; }
+
+.compare__note { margin: 0; color: var(--ink-tertiary); font-size: 12.5px; }
+
+.compare__empty {
+  padding: 28px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-16);
+  color: var(--ink-secondary);
+  font-size: 14px;
+}
+
+.compare__list { display: flex; flex-direction: column; gap: 12px; }
+
+.verdict-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 18px;
+  align-items: start;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--neutral);
+  border-radius: var(--border-radius-16);
+}
+
+.verdict-card--clean { border-left-color: var(--positive); }
+.verdict-card--clarify { border-left-color: var(--attention); }
+.verdict-card--attention { border-left-color: var(--negative); }
+
+/* Верхняя карточка выделена фоном, а не размером: она ответ на вопрос
+   «кто лучше», но не приз — увеличивать её значило бы объявить победителя. */
+.verdict-card--lead.verdict-card--clean { background: #f6fbf7; border-color: #bfe3c9; }
+
+.verdict-card__body { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+
+.verdict-card__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.verdict-card__name { font-size: 15px; font-weight: 600; }
+
+.verdict-card__label {
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--inset);
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+}
+
+.verdict-card__reasons {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.verdict-card__reasons > li { margin-bottom: 5px; }
+.verdict-card__clean { margin: 0; color: var(--ink-secondary); font-size: 13px; }
+
+/* Нехватка данных — не причина, а оговорка к выводу: рядом, но другим тоном. */
+.verdict-card__gaps { margin: 2px 0 0; color: var(--attention); font-size: 12.5px; }
+
+.verdict-card__aside button { color: var(--link); }
+
+.verdict-card__aside {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+}

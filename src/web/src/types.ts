@@ -264,3 +264,40 @@ export type CompanyNews = {
   failed: boolean;
   checked_at: number;
 };
+
+
+// ─────────── Сравнение контрагентов ───────────
+// Кейсодатель: «Скорее не ранжирование. Нужно вывод — с кем лучше не общаться.
+// Ранжирование в виде какого-то скора не требуется». Поэтому балла в контракте
+// нет: чего нет в типе, того нельзя случайно нарисовать.
+
+export type CompareLevel = 'clean' | 'clarify' | 'attention';
+
+export type CompareVerdict = {
+  inn: string;
+  name: string;
+  level: CompareLevel;
+  /** То же словами — для тех, кто читает, а не рисует. */
+  recommendation: string;
+  /** Причины, каждая прослеживается до раздела отчёта. */
+  reasons: string[];
+  /** Ключи разделов этих причин, один к одному с `reasons`. */
+  sections: string[];
+  /** Разделы, которые проверить было нечем. Наверху списка это единственное,
+   *  что отличает «проверили и чисто» от «проверять было нечем». */
+  gaps: string[];
+  checks_passed: number;
+  checks_total: number;
+};
+
+/** Вывод по пулу. Двумя полями: заголовок читается за взгляд,
+ *  подробность объясняет. */
+export type CompareSummary = { headline: string; detail: string };
+
+export type CompareResult = {
+  /** От чистого к спорному. Порядок задан сервером: он часть вывода,
+   *  а не украшение таблицы. */
+  verdicts: CompareVerdict[];
+  summary: CompareSummary;
+  not_found: string[];
+};

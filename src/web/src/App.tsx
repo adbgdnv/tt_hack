@@ -10,8 +10,8 @@ import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { Typography } from '@alfalab/core-components-typography';
 import { DocumentPdfMIcon } from '@alfalab/icons-glyph/DocumentPdfMIcon';
 import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
-import { getCounterparty, getNews, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
-import type { CompanyNews, Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
+import { compareCounterparties, getCounterparty, getNews, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
+import type { CompanyNews, CompareResult, Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
 import { deriveVerdict } from './verdict';
 import { Brand } from './components/Brand';
 // Отложенно: чат нужен только на экране компании, а тянет за собой разбор
@@ -22,6 +22,8 @@ const ChatPanel = lazy(() =>
   import('./components/ChatPanel').then((module) => ({ default: module.ChatPanel })),
 );
 import { BlockModal } from './components/BlockModal';
+import { ComparePool } from './components/ComparePool';
+import { CompareVerdicts } from './components/CompareVerdicts';
 import { SectionNav } from './components/SectionNav';
 import { anchorId } from './components/ReportSection';
 import { CompletionBar } from './components/CompletionBar';
@@ -51,17 +53,85 @@ function writeHistory(history: HistoryItem[]) {
   }
 }
 
-function AppHeader({ compact, onHome, children }: {
+function AppHeader({ compact, onHome, mode, onMode, children }: {
   compact?: boolean;
   onHome?: () => void;
+  /** Режим продукта. Без него подпись «Проверка контрагента» — просто текст;
+   *  с ним это выбор между проверкой одного и сравнением нескольких. */
+  mode?: 'report' | 'compare';
+  onMode?: (next: 'report' | 'compare') => void;
   children?: ReactNode;
 }) {
   return (
     <header className={'app-header' + (compact ? ' app-header--compact' : '')}>
       <Brand onHome={onHome} />
-      <span className="app-header__product">Проверка контрагента</span>
+      {mode && onMode ? (
+        <div className="app-header__modes" role="tablist" aria-label="Режим">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'report'}
+            className={`mode${mode === 'report' ? ' mode--on' : ''}`}
+            onClick={() => onMode('report')}
+          >
+            Проверка контрагента
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'compare'}
+            className={`mode${mode === 'compare' ? ' mode--on' : ''}`}
+            onClick={() => onMode('compare')}
+          >
+            Сравнение контрагентов
+          </button>
+        </div>
+      ) : (
+        <span className="app-header__product">Проверка контрагента</span>
+      )}
       {children}
     </header>
+  );
+}
+
+function ComparePage({ pool, result, failed, onAdd, onRemove, onOpenReport }: {
+  pool: string[];
+  result: CompareResult | null;
+  failed: boolean;
+  onAdd: (inn: string) => void;
+  onRemove: (inn: string) => void;
+  onOpenReport: (inn: string, section?: string) => void;
+}) {
+  return (
+    <main className="page compare-page">
+      <ComparePool
+        pool={pool}
+        verdicts={result?.verdicts ?? []}
+        notFound={result?.not_found ?? []}
+        onAdd={onAdd}
+        onRemove={onRemove}
+      />
+
+      {failed ? (
+        <p className="compare__empty">
+          Не удалось собрать сравнение. Это сбой сервиса, а не утверждение
+          о компаниях.
+        </p>
+      ) : pool.length === 0 ? (
+        <p className="compare__empty">
+          Добавьте контрагентов по ИНН — сравнение покажет, к кому из них меньше
+          вопросов, и назовёт причины.
+        </p>
+      ) : result === null ? (
+        <p className="compare__empty">Собираем сравнение…</p>
+      ) : (
+        <CompareVerdicts
+          verdicts={result.verdicts}
+          summary={result.summary}
+          onOpenReport={onOpenReport}
+        />
+      )}
+    </main>
   );
 }
 
@@ -203,13 +273,14 @@ function headerFacts(sections: ReportSectionData[]) {
   return facts.filter((fact) => labels.test(fact.label)).map((fact) => ({ label: fact.label, value: String(fact.value) }));
 }
 
-function Dashboard({ company, report, news, openedSection, highlighted, onHome, onOpenBlock, onCloseBlock, onToast }: {
+function Dashboard({ company, report, news, openedSection, highlighted, onHome, onCompare, onOpenBlock, onCloseBlock, onToast }: {
   company: Counterparty;
   report: CounterpartyReport | null;
   news: CompanyNews | null | undefined;
   openedSection: string | null;
   highlighted: boolean;
   onHome: () => void;
+  onCompare: () => void;
   onOpenBlock: (key: string, proof?: boolean) => void;
   onCloseBlock: () => void;
   onToast: (message: string) => void;
@@ -257,7 +328,7 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
 
   return (
     <>
-      <AppHeader compact onHome={onHome}>
+      <AppHeader compact onHome={onHome} mode="report" onMode={(next) => next === 'compare' && onCompare()}>
         {/* Имя и ИНН в шапке, а не отдельным блоком на пол-экрана: полоса
             разбора занимает верх страницы, и «про какую компанию мы говорим»
             должно оставаться видимым, когда отчёт уехал вниз. */}
@@ -370,7 +441,12 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
 }
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'dashboard'>('home');
+  const [view, setView] = useState<'home' | 'dashboard' | 'compare'>('home');
+  // Пул сравнения живёт рядом с отчётом, а не вместо него: переключение
+  // режимов не должно терять ни открытую компанию, ни собранный пул.
+  const [pool, setPool] = useState<string[]>([]);
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
+  const [compareFailed, setCompareFailed] = useState(false);
   const [query, setQueryState] = useState('');
   const [suggestions, setSuggestions] = useState<Counterparty[]>([]);
   const [searching, setSearching] = useState(false);
@@ -396,6 +472,29 @@ export default function App() {
   }, []);
   const [highlighted, setHighlighted] = useState(false);
   const [toast, setToast] = useState('');
+
+  // Пул пересобирается на сервере при каждом изменении: порядок и вывод —
+  // часть ответа, а не клиентская сортировка.
+  useEffect(() => {
+    if (pool.length === 0) {
+      setCompareResult(null);
+      setCompareFailed(false);
+      return undefined;
+    }
+    let живо = true;
+    setCompareFailed(false);
+    void compareCounterparties(pool)
+      .then((итог) => живо && setCompareResult(итог))
+      .catch(() => живо && setCompareFailed(true));
+    return () => {
+      живо = false;
+    };
+  }, [pool]);
+
+  const addToPool = (inn: string) =>
+    setPool((текущий) => (текущий.includes(inn) ? текущий : [...текущий, inn]));
+  const removeFromPool = (inn: string) =>
+    setPool((текущий) => текущий.filter((и) => и !== inn));
 
   useEffect(() => {
     if (!query.trim()) {
@@ -519,6 +618,31 @@ export default function App() {
           onSearch={submitSearch}
           onSelect={(inn) => void openCompany(inn)}
         />
+      ) : view === 'compare' ? (
+        <>
+          <AppHeader
+            compact
+            onHome={goHome}
+            mode="compare"
+            onMode={(next) => setView(next === 'compare' ? 'compare' : company ? 'dashboard' : 'home')}
+          >
+            <div className="app-header__actions">
+              <ButtonDesktop size={40} view="text" onClick={goHome}>Новый поиск</ButtonDesktop>
+            </div>
+          </AppHeader>
+          <ComparePage
+            pool={pool}
+            result={compareResult}
+            failed={compareFailed}
+            onAdd={addToPool}
+            onRemove={removeFromPool}
+            onOpenReport={(inn, section) => {
+              void openCompany(inn).then(() => {
+                if (section) openBlock(section);
+              });
+            }}
+          />
+        </>
       ) : company ? (
         <Dashboard
           company={company}
@@ -527,6 +651,12 @@ export default function App() {
           openedSection={modalBlock}
           highlighted={highlighted}
           onHome={goHome}
+          onCompare={() => {
+            // Открытая компания попадает в пул первой: сравнивать её с кем-то
+            // и есть причина, по которой сюда переключаются.
+            addToPool(company.inn);
+            setView('compare');
+          }}
           onOpenBlock={openBlock}
           onCloseBlock={() => { setModalBlock(null); setHighlighted(false); window.scrollTo({ top: 0 }); }}
           onToast={setToast}
