@@ -5,6 +5,8 @@
 и как свести оценки в одну.
 """
 
+import pytest
+
 from api import news
 
 
@@ -86,3 +88,51 @@ def test_потолок_страницы_жёстче_чем_у_инструме
 
     assert news.PAGE_CHARS < search.PAGE_CHARS
     assert news.MAX_ITEMS * news.PAGE_CHARS <= 4500
+
+
+def test_оценка_новостей_идёт_мимо_основной_модели(monkeypatch):
+    """Оценка находки — короткая разметка по трём правилам. Платить за неё
+    вместе с разбором отчёта не за что: блок висит на каждой карточке
+    и обновляется раз в шесть часов у каждой компании.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-тест")
+    заказано = {}
+
+    class Подставной:
+        def __init__(self, provider="", **_):
+            заказано["провайдер"] = provider
+
+        def chat(self, max_tokens=0, **_):
+            заказано["бюджет"] = max_tokens
+            raise RuntimeError("дальше сети не идём")
+
+    monkeypatch.setattr(news, "LLMClient", Подставной)
+    with pytest.raises(RuntimeError):
+        news._assess([{"title": "т", "snippet": "с"}], [""], "ООО «Т»")
+
+    assert заказано["провайдер"] == "groq"
+    # Запас на ответ. Прежние 700 стояли под gpt-oss с `reasoning_effort="low"`;
+    # на deepseek рассуждение съело 612 из них, ответ не распарсился, и блок
+    # показал «внешний поиск не отвечает» — сбой связи вместо сбоя бюджета.
+    assert заказано["бюджет"] >= 1500
+
+
+def test_без_ключа_запасного_провайдера_блок_не_пропадает(monkeypatch):
+    """Оценщик — предпочтение, а не требование: блок не должен исчезать
+    только потому, что бесплатный ключ не завели."""
+    monkeypatch.setenv("GROQ_API_KEY", "")
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    заказано = {}
+
+    class Подставной:
+        def __init__(self, provider="", **_):
+            заказано["провайдер"] = provider
+
+        def chat(self, **_):
+            raise RuntimeError("дальше сети не идём")
+
+    monkeypatch.setattr(news, "LLMClient", Подставной)
+    with pytest.raises(RuntimeError):
+        news._assess([{"title": "т", "snippet": "с"}], [""], "ООО «Т»")
+
+    assert заказано["провайдер"] == ""
