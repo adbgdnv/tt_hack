@@ -11,6 +11,12 @@ import type { ReportFact, ReportSectionData, SectionState } from '../types';
 
 export { STATE_LABEL };
 
+/** Якорь карточки раздела. Один способ собрать имя на оба конца — навигацию
+ *  и саму карточку: разойтись им иначе нечем не помешает. */
+export function anchorId(key: string): string {
+  return `section-${key}`;
+}
+
 /**
  * Сколько проверок раздела компания прошла.
  *
@@ -259,8 +265,11 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
   const className = `report-section report-section--${preview ? 'preview' : 'detail'} ${stateModifier(section.state)}`;
 
   if (preview) {
+    // Якорь — на самой карточке, а не реестром координат в состоянии:
+    // координаты пришлось бы пересчитывать на каждой смене высоты полосы
+    // разбора, а она теперь меняется вместе с разговором.
     return (
-      <button className={className} type="button" onClick={onOpen}>
+      <button id={anchorId(section.key)} className={className} type="button" onClick={onOpen}>
         {content}
       </button>
     );

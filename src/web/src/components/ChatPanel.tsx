@@ -443,12 +443,13 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
 
       {/* Подсказки нужны ровно до первого вопроса: они отвечают «с чего
           начать». Дальше человек уже начал, а они отнимают у ленты треть
-          высоты ровно там, где идёт ответ. */}
-      <div
-        className="chat-suggestions"
-        aria-label="Предложенные вопросы"
-        hidden={messages.length > 0}
-      >
+          высоты ровно там, где идёт ответ.
+
+          Условной отрисовкой, а не `hidden`: у блока есть `display` из класса,
+          а правило автора сильнее браузерного `[hidden] { display: none }` —
+          атрибут стоял, подсказки показывались. */}
+      {messages.length === 0 && (
+      <div className="chat-suggestions" aria-label="Предложенные вопросы">
         <span>С чего начать</span>
         {questions.map((question) => (
           <ButtonDesktop
@@ -464,6 +465,7 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           </ButtonDesktop>
         ))}
       </div>
+      )}
 
       <form
         className="chat-form"

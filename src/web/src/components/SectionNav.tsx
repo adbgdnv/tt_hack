@@ -7,6 +7,10 @@ import type { ReportSectionData } from '../types';
 /**
  * Навигация по разделам — восемь точек справа от полосы разбора.
  *
+ * Ведёт к разделу, а не открывает его: подробности показывает сама карточка
+ * по нажатию. Разные действия у одного раздела — не путаница, а два разных
+ * намерения: «покажи, где это» и «покажи подробнее».
+ *
  * Отчёт делает две работы. Первая, «что вообще проверено и где горит», карточек
  * не требует: восьми точек достаточно, и они помещаются в узкую колонку рядом
  * с разговором. Вторая, «покажи подробности», остаётся за карточками ниже.
@@ -19,10 +23,14 @@ import type { ReportSectionData } from '../types';
  */
 export function SectionNav({
   sections,
-  onOpen,
+  onGo,
 }: {
   sections: ReportSectionData[];
-  onOpen: (key: string) => void;
+  /** Перейти к разделу в отчёте. Именно перейти, а не открыть: список
+   *  из восьми пунктов обещает перемещение между ними, и подмена отчёта
+   *  подробным видом это обещание не выполняет — после каждого пункта
+   *  пришлось бы возвращаться назад. */
+  onGo: (key: string) => void;
 }) {
   if (sections.length === 0) return null;
 
@@ -45,8 +53,8 @@ export function SectionNav({
             <button
               type="button"
               className="section-nav__item"
-              onClick={() => onOpen(section.key)}
-              aria-label={`${section.title}: ${STATE_LABEL[section.state]}`}
+              onClick={() => onGo(section.key)}
+              aria-label={`Перейти к разделу «${section.title}»: ${STATE_LABEL[section.state]}`}
             >
               <Indicator size={8} backgroundColor={STATE_COLOR[section.state]} />
               <span>{section.title}</span>

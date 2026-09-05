@@ -23,6 +23,7 @@ const ChatPanel = lazy(() =>
 );
 import { BlockModal } from './components/BlockModal';
 import { SectionNav } from './components/SectionNav';
+import { anchorId } from './components/ReportSection';
 import { CompletionBar } from './components/CompletionBar';
 import { NewsBlock } from './components/NewsBlock';
 import { ReportSection } from './components/ReportSection';
@@ -229,6 +230,20 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
   // Экран новой компании открывается её отчётом, а не чужой перепиской.
   useEffect(() => setAsking(false), [company.inn]);
 
+  // Переход к разделу из навигации: подробный вид закрывается — иначе целевой
+  // карточки на странице просто нет, — и страница прокручивается к ней.
+  // Прокрутка в следующем кадре: карточка появляется только после отрисовки
+  // закрытого подробного вида.
+  const goToSection = (key: string) => {
+    onCloseBlock();
+    requestAnimationFrame(() => {
+      document.getElementById(anchorId(key))?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
+
   // Дата, на которую собраны данные. Спрашиваем у сервиса, а не подставляем
   // заглушку: раньше в карточке стояло «Данные отчёта на дата не указана».
   const [dataDate, setDataDate] = useState<string | null>(null);
@@ -295,7 +310,7 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
               onToast={onToast}
             />
           </Suspense>
-          <SectionNav sections={sections} onOpen={onOpenBlock} />
+          <SectionNav sections={sections} onGo={goToSection} />
         </div>
 
         <div className="dashboard-content">
