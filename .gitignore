@@ -24,3 +24,9 @@ data
 
 # подготовленный набор: собирается скриптом, содержит данные учредителей
 dataset/
+
+# eval: сгенерированный датасет и результаты живых прогонов содержат реальные ИНН
+evals/datasets/*
+!evals/datasets/.gitkeep
+evals/results/*
+!evals/results/.gitkeep
