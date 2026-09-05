@@ -297,23 +297,13 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
         </div>
       </AppHeader>
 
-      {/* Сверху — разговор и навигация по разделам, под ними отчёт. Раскрытие
-          полосы двигает всё вниз само, потоком документа: считать высоты
-          и раздавать отступы не нужно, а значит нечему и разъезжаться. */}
+      {/* Базовый экран: блоки слева, разбор колонкой справа. Разбор
+          раскрывается поверх страницы на всю ширину — отчёт при этом остаётся
+          на месте под ним, а не уезжает: к нему возвращаются проверять
+          утверждения, и он не должен менять положение. */}
       <main className="page dashboard-page">
-        <div className={`dash-top${asking ? ' dash-top--asking' : ''}`}>
-          <Suspense fallback={<div className="chat-band chat-band--loading">Загрузка разбора…</div>}>
-            <ChatPanel
-              report={report}
-              expanded={asking}
-              onExpanded={setAsking}
-              onToast={onToast}
-            />
-          </Suspense>
-          <SectionNav sections={sections} onGo={goToSection} />
-        </div>
-
-        <div className="dashboard-content">
+        <div className="dashboard-layout">
+        <section className="dashboard-main">
           {openedSection ? (
             <BlockModal
               sections={sections}
@@ -360,6 +350,19 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
               <CompletionBar onAnswer={() => onToast('Спасибо за отзыв')} />
             </>
           )}
+        </section>
+
+        <aside className="dashboard-side">
+          <SectionNav sections={sections} onGo={goToSection} />
+          <Suspense fallback={<div className="chat-band chat-band--loading">Загрузка разбора…</div>}>
+            <ChatPanel
+              report={report}
+              expanded={asking}
+              onExpanded={setAsking}
+              onToast={onToast}
+            />
+          </Suspense>
+        </aside>
         </div>
       </main>
     </>

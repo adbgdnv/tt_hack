@@ -325,6 +325,17 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
   };
 
   return (
+    <>
+      {/* Подложка гасит отчёт, но оставляет его видимым и на месте: к нему
+          возвращаются проверять утверждения, и он не должен ни исчезать,
+          ни менять положение под наложением. */}
+      {expanded && (
+        <div
+          className="chat-scrim"
+          aria-hidden="true"
+          onClick={() => !busy && setExpanded(false)}
+        />
+      )}
     <section
       className={`chat-band${expanded ? ' chat-band--open' : ''}`}
       aria-label="Разбор отчёта контрагента"
@@ -504,5 +515,6 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
         />
       </form>
     </section>
+    </>
   );
 }
