@@ -1,3 +1,4 @@
+import re
 from types import SimpleNamespace
 
 from evals.build_cases import build_core_suite
@@ -45,7 +46,19 @@ def _build_charts(record):
 def _fixture_records():
     rows = []
     for i in range(6):
-        rows.append(_record(f"u{i}", risk="UNKNOWN"))
+        # У четырёх из шести компаний с пустым светофором есть живые сигналы —
+        # это и есть материал для категории unknown_with_signals.
+        negative = (
+            ({"code": "arbitrationDefendant", "heading": "Ответчик в арбитраже"},) if i < 4 else ()
+        )
+        rows.append(
+            _record(
+                f"u{i}",
+                risk="UNKNOWN",
+                negative=negative,
+                court_amount=(i + 1) * 1_000_000 if negative else 0,
+            )
+        )
     for i in range(5):
         rows.append(_record(f"n{i}", court_amount=(i + 2) * 1_000_000_000))
     for i in range(5):
@@ -53,7 +66,7 @@ def _fixture_records():
             _record(
                 f"c{i}",
                 risk="LOW",
-                negative=({"heading": f"Сигнал {i}"},),
+                negative=({"code": "liquidationStatus", "heading": "Процедура банкротства"},),
                 court_amount=100 + i,
             )
         )
@@ -71,16 +84,17 @@ def _fixture_records():
     return rows
 
 
-def test_core_suite_contains_exactly_30_high_value_cases():
+def test_core_suite_contains_exactly_34_high_value_cases():
     cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
 
-    assert len(cases) == 30
+    assert len(cases) == 34
     counts = {}
     for case in cases:
         counts[case.category] = counts.get(case.category, 0) + 1
 
     assert counts == {
         "bank_unknown": 6,
+        "unknown_with_signals": 4,
         "large_numbers": 5,
         "risk_conflict": 5,
         "not_applicable": 4,
@@ -96,8 +110,53 @@ def test_conflict_cases_require_a_real_signal_and_forbid_decision_claims():
     cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
     conflict = next(case for case in cases if case.category == "risk_conflict")
 
-    assert any("Сигнал" in pattern for pattern in conflict.expect.required_patterns)
     assert any("можно" in pattern for pattern in conflict.expect.forbidden_patterns)
+    # Сигнал должен опознаваться в пересказе своими словами, а не только дословно.
+    pattern = conflict.expect.required_patterns[0]
+    assert re.search(pattern, "в отношении компании идёт процедура банкротства", re.IGNORECASE)
+    assert not re.search(pattern, "никаких замечаний по компании", re.IGNORECASE)
+
+
+def test_unknown_with_signals_requires_naming_the_found_fact():
+    """Пустой светофор банка не освобождает от независимого вердикта по данным."""
+    cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
+    signal_cases = [case for case in cases if case.category == "unknown_with_signals"]
+
+    assert len(signal_cases) == 4
+    for case in signal_cases:
+        assert "рисков нет" in case.expect.forbidden_patterns
+        # Пересказ своими словами засчитывается, дословная цитата заголовка не нужна.
+        pattern = case.expect.required_patterns[0]
+        assert re.search(pattern, "1 525 дел, из них как ответчиком — 2,69 млрд ₽", re.IGNORECASE)
+        assert not re.search(pattern, "банк оценку не выставил, это всё", re.IGNORECASE)
+        # Конкретная сумма здесь не требуется — вопрос не про неё.
+        assert not case.expect.numbers
+
+
+def test_bank_unknown_forbids_the_bank_verdict_not_the_words():
+    """«Зелёный ЗСК — низкий риск вовлечённости» — верная фраза про другой светофор."""
+    cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
+    case = next(case for case in cases if case.category == "bank_unknown")
+    forbidden = case.expect.forbidden_patterns
+
+    about_zsk = "Уровень ЗСК — «Зелёный». Это низкий риск вовлечённости в операции."
+    about_bank = "Скоринг банка низкий, беспокоиться не о чем."
+    assert not any(re.search(p, about_zsk, re.IGNORECASE) for p in forbidden)
+    assert any(re.search(p, about_bank, re.IGNORECASE) for p in forbidden)
+
+
+def test_empty_sections_accept_synonyms_of_no_data():
+    cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
+    case = next(case for case in cases if case.category == "empty")
+    pattern = case.expect.required_patterns[0]
+
+    for answer in (
+        "Бухгалтерской отчётности нет ни за один год.",
+        "Нельзя оценить выручку и активы компании.",
+        "Данных нет.",
+    ):
+        assert re.search(pattern, answer, re.IGNORECASE), answer
+    assert not re.search(pattern, "По разделу всё в порядке.", re.IGNORECASE)
 
 
 def test_chart_cases_grade_the_exact_chart_kind():

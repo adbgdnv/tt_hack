@@ -5,6 +5,30 @@ from evals.run import load_cases, summarize
 from evals.schema import CaseResult, GradeResult
 
 
+def test_load_cases_filters_category(tmp_path: Path):
+    path = tmp_path / "cases.jsonl"
+    rows = [
+        {
+            "id": "a",
+            "suite": "risk",
+            "category": "bank_unknown",
+            "inn": "1",
+            "turns": [{"user": "q"}],
+        },
+        {
+            "id": "b",
+            "suite": "risk",
+            "category": "unknown_with_signals",
+            "inn": "2",
+            "turns": [{"user": "q"}],
+        },
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+
+    cases = load_cases(path, category="unknown_with_signals")
+    assert [case.id for case in cases] == ["b"]
+
+
 def test_load_cases_filters_suite(tmp_path: Path):
     path = tmp_path / "cases.jsonl"
     rows = [

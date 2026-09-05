@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from evals.schema import EvalCase
 
 CORE_DISTRIBUTION = {
     "bank_unknown": 6,
+    "unknown_with_signals": 4,
     "large_numbers": 5,
     "risk_conflict": 5,
     "not_applicable": 4,
@@ -59,14 +59,47 @@ def _court_amount(record: dict) -> float:
     return _num((record.get("arbitrationByStatus") or {}).get("commonAmount"))
 
 
-def _first_signal_heading(report: Any) -> str | None:
-    for section in getattr(report, "sections", ()):
-        factors = tuple(getattr(section, "factors", ()) or ())
-        if factors:
-            heading = str(getattr(factors[0], "heading", "")).strip()
-            if heading:
-                return heading
-    return None
+# Как модель назовёт факт своими словами — по одному выражению на каждый из
+# пятнадцати негативных кодов (их полный список — `core.factors.HEADINGS`).
+#
+# Дословный заголовок отчёта требовать нельзя: на «Ответчик в арбитраже» модель
+# отвечает «1 525 дел, из них как ответчик — 2,69 млрд ₽», и проверка дословности
+# заваливает правильный ответ. Выводить основы слов автоматически — тоже мимо:
+# из «Много кодов ОКВЭД» получаются огрызки «мно» и «код», под которые подходит
+# любой текст. Поэтому карта написана руками и читается в отчёте о провале.
+_SIGNAL_PATTERNS: dict[str, str] = {
+    "arbitrationDefendant": r"ответчик|арбитраж|судебн\w+ дел",
+    "massOkved": r"ОКВЭД",
+    "executionProceedings": r"исполнительн\w+ производств",
+    "massAddress": r"массов\w+ адрес",
+    "fnsBlocking": r"блокиров\w*\s+счет|счет\w*\s+заблокир|приостановлен\w+ операц",
+    "profit": r"убыт",
+    "invalidRegistrationData": r"недостоверн\w+ (?:регистрационн\w+ )?(?:данн|сведен)",
+    "invalidAddress": r"фиктивн\w+ адрес|недостоверн\w+ адрес",
+    "massAuthpersons": r"массов\w+ (?:директор|учредител|руководител)",
+    "invalidAuthpersonsData": r"номинальн\w+ (?:руководител|директор)",
+    "currentAssets": r"оборотн\w+ актив",
+    "liquidationStatus": r"банкротств|ликвидац",
+    "dishonestProvider": r"недобросовестн\w+ поставщик",
+    "taxArrears": r"должник ФНС|задолженност\w*\s+(?:по )?налог|налогов\w+ задолженност",
+    "inspectionWithViolation": r"проверк\w*.{0,40}нарушени|нарушени\w*.{0,40}проверк",
+}
+
+
+def _signal_pattern(record: dict) -> str:
+    """Регексп «назван хотя бы один реальный сигнал этой компании».
+
+    Достаточно любого из найденных фактов: требовать перечисления всех — значит
+    проверять полноту пересказа, а не то, что агент вообще посмотрел в данные.
+    Незнакомый код молча пропускается: набор кодов может пополниться, и это не
+    повод уронить сборку.
+    """
+    parts = [
+        _SIGNAL_PATTERNS[code]
+        for factor in _negatives(record)
+        if (code := str(factor.get("code") or "")) in _SIGNAL_PATTERNS
+    ]
+    return "|".join(dict.fromkeys(parts))
 
 
 def _case(raw: dict) -> EvalCase:
@@ -87,7 +120,7 @@ def build_core_suite(
     build_report_fn: Callable[[dict], Any],
     build_charts_fn: Callable[[dict], Iterable[Any]],
 ) -> list[EvalCase]:
-    """Build the fixed 30-case regression/risk suite from canonical project data."""
+    """Build the fixed 34-case regression/risk suite from canonical project data."""
     rows = [record for record in records if _inn(record)]
     reports = {_inn(record): build_report_fn(record) for record in rows}
     cases: list[EvalCase] = []
@@ -107,7 +140,54 @@ def build_core_suite(
                         "required_patterns": [
                             "оценить невозможно|оценки нет|нет данных для оценки"
                         ],
-                        "forbidden_patterns": ["низк(?:ий|ого) риск|рисков нет|безопасн"],
+                        # Ловим ошибку «пустая оценка банка выдана за низкий риск»,
+                        # а не сами слова «низкий риск»: у этих же компаний зелёный
+                        # ЗСК, и фраза «зелёный — низкий риск вовлечённости в
+                        # подозрительные операции» верна и относится к другому
+                        # светофору. Запрет без привязки к банку заваливал за неё
+                        # правильные ответы (прогон 2026-09-05).
+                        "forbidden_patterns": [
+                            r"(?:скоринг|оценка|модель)\s+банка[^.]{0,60}низк",
+                            r"банк\w*\s+(?:присвоил|оценил|поставил|считает|относит)"
+                            r"[^.]{0,60}низк",
+                            "рисков нет",
+                            "безопасн",
+                        ],
+                    },
+                }
+            )
+        )
+
+    # Пустой светофор банка при живых сигналах в самом отчёте — случай МАКСМАРКЕТ,
+    # только светофор не зелёный, а вовсе не выставлен. `bank_unknown` выше проверяет
+    # лишь отрицательное условие («не называть это низким риском»); здесь проверяется
+    # положительное: агент обязан назвать конкретный найденный факт, а не остановиться
+    # на «банк не оценил». Это и есть обещанный продуктом второй, независимый вердикт.
+    signals = [(record, pattern) for record in unknown if (pattern := _signal_pattern(record))]
+    signals.sort(
+        key=lambda item: (-len(_negatives(item[0])), -_court_amount(item[0]), _inn(item[0]))
+    )
+    for record, pattern in _take(
+        signals, CORE_DISTRIBUTION["unknown_with_signals"], "unknown_with_signals"
+    ):
+        inn = _inn(record)
+        cases.append(
+            _case(
+                {
+                    "id": f"unknown-with-signals-{inn}",
+                    "suite": "risk",
+                    "category": "unknown_with_signals",
+                    "inn": inn,
+                    "turns": [
+                        {"user": "Раз у банка нет оценки риска, значит проверять больше нечего?"}
+                    ],
+                    # Конкретных чисел здесь не требуем: вопрос не про сумму, и агент
+                    # вправе назвать ту величину, которая уместнее — например, сумму
+                    # только по роли ответчика вместо общей. Точность чисел проверяет
+                    # `large_numbers`, где вопрос прямо просит общую сумму.
+                    "expect": {
+                        "required_patterns": [pattern],
+                        "forbidden_patterns": ["рисков нет", "всё чисто", "проверять нечего"],
                     },
                 }
             )
@@ -136,13 +216,13 @@ def build_core_suite(
     for record in rows:
         if _risk(record) != "LOW" or not _negatives(record):
             continue
-        heading = _first_signal_heading(reports[_inn(record)])
-        if heading:
-            conflict_candidates.append((record, heading))
+        pattern = _signal_pattern(record)
+        if pattern:
+            conflict_candidates.append((record, pattern))
     conflict_candidates.sort(
         key=lambda item: (-len(_negatives(item[0])), -_court_amount(item[0]), _inn(item[0]))
     )
-    for record, heading in _take(
+    for record, pattern in _take(
         conflict_candidates, CORE_DISTRIBUTION["risk_conflict"], "risk_conflict"
     ):
         inn = _inn(record)
@@ -157,7 +237,7 @@ def build_core_suite(
                         {"user": "У компании низкий риск. Значит всё нормально и можно работать?"}
                     ],
                     "expect": {
-                        "required_patterns": [re.escape(heading)],
+                        "required_patterns": [pattern],
                         "forbidden_patterns": [
                             r"можно\s+(?:с\s+ней\s+)?работать",
                             "сотрудничеств.*безопасн",
@@ -218,7 +298,19 @@ def build_core_suite(
                     "inn": inn,
                     "turns": [{"user": f"По разделу «{title}» всё чисто?"}],
                     "expect": {
-                        "required_patterns": ["данных нет|оценить.*невозможно|недостаточно данных"],
+                        # «Нет данных» говорят по-разному: «отчётности нет ни за один
+                        # год», «нельзя оценить выручку», «раздел пустой». Требовать
+                        # одну формулировку — значит валить правильные ответы за
+                        # синоним (прогон 2026-09-05).
+                        "required_patterns": [
+                            r"(?:данн\w+|отчётност\w+|сведени\w+|информаци\w+)\s+"
+                            r"(?:нет|отсутству\w+)"
+                            r"|нет\s+(?:данных|отчётности|сведений|информации)"
+                            r"|(?:нельзя|невозможно)\s+оценить"
+                            r"|оценить\s+(?:нельзя|невозможно)"
+                            r"|недостаточно данных"
+                            r"|раздел\w*\s+пуст"
+                        ],
                         "forbidden_patterns": ["рисков нет|всё чисто|нарушений нет"],
                     },
                 }

@@ -15,7 +15,12 @@ from evals.runners.current_agent import CurrentAgentRunner
 from evals.schema import CaseResult, EvalCase
 
 
-def load_cases(path: Path, suite: str | None = None, limit: int | None = None) -> list[EvalCase]:
+def load_cases(
+    path: Path,
+    suite: str | None = None,
+    limit: int | None = None,
+    category: str | None = None,
+) -> list[EvalCase]:
     cases: list[EvalCase] = []
     with path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -26,6 +31,11 @@ def load_cases(path: Path, suite: str | None = None, limit: int | None = None) -
             except (json.JSONDecodeError, ValueError, KeyError) as exc:
                 raise ValueError(f"invalid eval case at {path}:{line_number}: {exc}") from exc
             if suite and case.suite != suite:
+                continue
+            # Отбор по категории нужен, чтобы перепроверять один класс ошибок после
+            # правки промпта, не оплачивая весь набор: полный прогон — это тридцать
+            # с лишним обращений к модели.
+            if category and case.category != category:
                 continue
             cases.append(case)
             if limit is not None and len(cases) >= limit:
@@ -75,10 +85,13 @@ def main() -> None:
     parser.add_argument("--dataset", default="evals/datasets/generated.jsonl")
     parser.add_argument("--suite", choices=("golden", "regression", "risk", "online"))
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--category", help="Прогнать только одну категорию кейсов")
     parser.add_argument("--output", help="Optional JSON file with per-case results and summary")
     args = parser.parse_args()
 
-    cases = load_cases(Path(args.dataset), suite=args.suite, limit=args.limit)
+    cases = load_cases(
+        Path(args.dataset), suite=args.suite, limit=args.limit, category=args.category
+    )
     if not cases:
         raise SystemExit(
             "No eval cases matched. Build the dataset first with: python -m evals.build_cases"

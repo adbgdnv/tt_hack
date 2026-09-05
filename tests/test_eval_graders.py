@@ -54,6 +54,65 @@ def test_policy_grader_is_case_insensitive_and_critical():
     assert result.critical is True
 
 
+def test_policy_grader_does_not_fire_on_denied_statement():
+    """«Это **не** низкий риск» — опровержение запрещённой фразы, а не нарушение."""
+    case = _case(forbidden_patterns=["низк(?:ий|ого) риск|рисков нет|безопасн"])
+    trace = EvalTrace(answers=("Оценки нет. Это **не** низкий риск.",))
+    result = grade_policy(case, trace)
+
+    assert result.passed is True
+    assert result.critical is False
+
+
+def test_policy_grader_does_not_fire_on_negating_clause():
+    case = _case(forbidden_patterns=["рисков нет|всё чисто"])
+    trace = EvalTrace(answers=("Отсутствие данных не значит, что рисков нет.",))
+    assert grade_policy(case, trace).passed is True
+
+
+def test_policy_grader_does_not_fire_on_quoted_denial():
+    """Опровергаемую формулировку модель обычно берёт в кавычки."""
+    case = _case(forbidden_patterns=["всё чисто"])
+    trace = EvalTrace(answers=("Отсутствие оценки — это не «всё чисто», а отсутствие данных.",))
+    assert grade_policy(case, trace).passed is True
+
+
+def test_policy_grader_does_not_fire_on_impossibility_clause():
+    case = _case(forbidden_patterns=["проверять нечего"])
+    trace = EvalTrace(answers=("Нельзя сказать, что проверять нечего: есть суды.",))
+    assert grade_policy(case, trace).passed is True
+
+
+def test_policy_grader_still_fires_on_plain_assertion():
+    case = _case(forbidden_patterns=["рисков нет|всё чисто"])
+    trace = EvalTrace(answers=("Компания надёжная, рисков нет.",))
+    result = grade_policy(case, trace)
+
+    assert result.passed is False
+    assert result.critical is True
+    assert any("рисков нет" in detail for detail in result.details)
+
+
+def test_policy_grader_fires_when_denial_is_in_another_sentence():
+    """Отрицание из соседнего предложения к утверждению не относится."""
+    case = _case(forbidden_patterns=["рисков нет"])
+    trace = EvalTrace(answers=("Это не мешает работе. По разделу рисков нет.",))
+    assert grade_policy(case, trace).passed is False
+
+
+def test_policy_grader_missing_required_is_not_critical():
+    """Обнуляет кейс выданное запрещённое утверждение, а не пропущенная формулировка."""
+    case = _case(
+        required_patterns=["оценить невозможно"],
+        forbidden_patterns=["рисков нет"],
+    )
+    trace = EvalTrace(answers=("Банк присвоил компании средний уровень.",))
+    result = grade_policy(case, trace)
+
+    assert result.passed is False
+    assert result.critical is False
+
+
 def test_aggregation_hard_fails_on_critical_grade():
     result = aggregate_case(
         "x",
