@@ -29,6 +29,7 @@ from core.charts import ChartSpec
 # показывать нельзя: пользователь читает ленту, а не отладочный вывод.
 TOOL_TITLES = {
     "show_chart": "Строю график",
+    "look_up": "Запросил данные",
     "web_search": "Ищу во внешних источниках",
     "fetch_page": "Читаю страницу",
 }
@@ -63,7 +64,7 @@ def tool_title(tool: str, arguments: str, charts: dict[str, ChartSpec]) -> str:
     spec = charts.get(kind) if kind else None
     if spec is not None:
         return f"{base} «{spec.title}»"
-    for поле in ("query", "url"):
+    for поле in ("topic", "query", "url"):
         значение = parsed.get(поле)
         if значение:
             return f"{base}: {значение}"
@@ -116,6 +117,10 @@ class Translator:
                 out.append(Event("chart", payload["chart"]))
             if "sources" in payload:
                 out.append(Event("sources", {"items": payload["sources"]}))
+            if "lookup" in payload:
+                # Взятое по теме показывается пользователю целиком: модель
+                # не должна видеть того, чего не видит он.
+                out.append(Event("lookup", payload["lookup"]))
         name = getattr(message, "name", "") or ""
         out.append(Event("tool_end", {"tool": name, "ok": not failed}))
         return out

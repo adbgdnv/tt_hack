@@ -136,13 +136,17 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
-          if [ -z "${LLM_API_KEY}" ]; then
-            echo "LLM_API_KEY не задан — пропускаю"; exit 0
+          # Ключей три: именной у каждого провайдера плюс общий для совместимости.
+          # Хватает любого — без ключей писать .env бессмысленно, сервис не поднимется.
+          if [ -z "${OPENROUTER_API_KEY}${GROQ_API_KEY}${LLM_API_KEY}" ]; then
+            echo "ни одного ключа модели не задано — пропускаю"; exit 0
           fi
           # Ключ уходит через stdin, а не аргументом: аргументы видны в ps на сервере.
           # umask 077 — файл создаётся сразу с правами 600.
@@ -155,7 +159,9 @@ jobs:
           printf '%s\n' \
             '# Создаётся деплоем (.github/workflows/deploy.yml). Правки руками затрутся.' \
             'API_ROOT_PATH=/api' \
-            "LLM_PROVIDER=${LLM_PROVIDER:-groq}" \
+            "LLM_PROVIDER=${LLM_PROVIDER:-openrouter}" \
+            "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" \
+            "GROQ_API_KEY=${GROQ_API_KEY}" \
             "LLM_API_KEY=${LLM_API_KEY}" \
             "${TRACING_LINES}" \
             "LANGSMITH_API_KEY=${LANGSMITH_API_KEY}" \

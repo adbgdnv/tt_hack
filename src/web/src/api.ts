@@ -1,5 +1,6 @@
 import { findFixtureByInn, searchFixtures } from './fixtures';
 import type {
+  AnswerCheck,
   BlockKey,
   CompanyNews,
   Counterparty,
@@ -321,6 +322,8 @@ export type ChatEvent =
   | { name: 'tool_end'; data: { tool: string; ok: boolean } }
   | { name: 'chart'; data: { chart: string; inn: string } }
   | { name: 'sources'; data: { items: { title: string; url: string; snippet: string }[] } }
+  | { name: 'lookup'; data: { topic: string; text: string } }
+  | { name: 'check'; data: AnswerCheck }
   | { name: 'error'; data: { detail: string } }
   | { name: 'done'; data: { sections: string[] } };
 

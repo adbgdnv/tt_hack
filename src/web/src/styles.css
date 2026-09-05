@@ -1133,6 +1133,36 @@ button.report-section:hover {
   padding-bottom: 4px;
 }
 
+/* Диалог во весь экран. Кейсодатель просил вынести агентскую часть вперёд:
+   «нужно сосредоточиться на сценарии агента». В колонке 408 пикселей вопрос
+   неудобно даже набрать, а ответ с графиком внутри вызова не помещается вовсе.
+
+   Отчёт при этом не разгружается и не перерисовывается — он остаётся под
+   подложкой ровно там, где был, и возврат по Esc не стоит ни одного запроса. */
+.chat-panel--expanded {
+  position: fixed;
+  inset: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1080px, calc(100vw - 32px));
+  height: auto;
+  min-height: 0;
+  z-index: 41;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 22%);
+}
+
+.chat-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  /* Гасим отчёт, но не прячем: к нему возвращаются проверять утверждения. */
+  background: rgb(15 20 30 / 34%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-panel--expanded { transition: box-shadow 0.15s ease; }
+}
+
 .chat-header {
   padding: 16px 18px;
   display: flex;
@@ -1427,6 +1457,40 @@ button.report-section:hover {
   border-radius: 0 var(--border-radius-8) var(--border-radius-8) 0;
   font-size: 13px;
 }
+/* Данные, взятые по теме. Моноширинный и с переносами: это выдержка из данных,
+   а не проза, и строки в ней выровнены по смыслу. */
+.tool-block__lookup {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface);
+  border-radius: var(--border-radius-8);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Чем подтверждён ответ. Спокойная по умолчанию, тревожная — только когда
+   что-то не сошлось: постоянная жёлтая полоса перестаёт читаться на третий раз. */
+.answer-check {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--border-radius-8);
+  background: var(--surface);
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
+.answer-check--doubt {
+  border-left: 3px solid var(--attention);
+  color: var(--ink-secondary);
+}
+
+.answer-check ul { margin: 4px 0 0; padding-left: 16px; }
+
 .tool-block__sources ul { margin: 4px 0 0; padding-left: 16px; }
 .tool-block__sources a { color: var(--link); }
 

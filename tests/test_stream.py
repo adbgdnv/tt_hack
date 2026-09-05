@@ -54,10 +54,13 @@ class ПодставнойАгент:
 
     def astream(self, *_, **__):
         async def поток():
-            if self.ошибка:
-                raise self.ошибка
+            # Куски идут до отказа: так проверяется разница между «упал сразу»
+            # и «упал посреди ответа» — во втором случае запасной путь брать уже
+            # нельзя, пользователь текст уже прочитал.
             for к in self.куски:
                 yield к, {}
+            if self.ошибка:
+                raise self.ошибка
 
         return поток()
 
@@ -74,7 +77,33 @@ async def прогнать(monkeypatch, агент, сессия=None):
 async def test_текст_приходит_событиями(monkeypatch):
     события, _ = await прогнать(monkeypatch, ПодставнойАгент([кусок("54 актив"), кусок("ных")]))
 
-    assert [с.name for с in события] == ["token", "token", "done"]
+    assert [с.name for с in события] == ["token", "token", "check", "done"]
+
+
+async def test_проверка_идёт_после_текста_а_не_до(monkeypatch):
+    """Ответ уже прочитан к моменту, когда приходит отметка о том, чем он
+    подтверждён. Задерживать ради проверки первое слово значило бы платить
+    за неё задержкой всего ответа."""
+    события, _ = await прогнать(monkeypatch, ПодставнойАгент([кусок("Компании 9 лет.")]))
+
+    имена = [с.name for с in события]
+    assert имена.index("check") > имена.index("token")
+    проверка = события[имена.index("check")].data
+    assert проверка["total"] == 1
+    # Девять лет есть в отчёте — обращаться к модели было не за чем
+    assert проверка["unverified"] == []
+    assert проверка["checked"] is False
+
+
+async def test_выдуманное_число_помечается(monkeypatch):
+    """«Не выдумывает» — критерий приёмки кейса, и до сих пор он держался
+    на одних формулировках промпта."""
+    агент = ПодставнойАгент([кусок("Исков на 999 999 999 ₽.")])
+
+    события, _ = await прогнать(monkeypatch, агент)
+
+    проверка = next(с.data for с in события if с.name == "check")
+    assert [c["number"] for c in проверка["unverified"]] == ["999 999 999"]
 
 
 async def test_последнее_событие_всегда_done(monkeypatch):
@@ -95,9 +124,81 @@ async def test_отказ_модели_приходит_событием_а_не
     assert "недоступен" in события[0].data["detail"]
 
 
+async def test_отказ_первого_пути_переводит_на_запасной(monkeypatch):
+    """Пользователь приходит за разбором, а не за отчётом о нашей инфраструктуре.
+    Отказ модели должен доходить до него только тогда, когда путей не осталось."""
+    from core.llm import Route
+
+    monkeypatch.setattr(
+        loop, "_routes", lambda: (Route("openrouter", "первая"), Route("openrouter", "вторая"))
+    )
+    построено = []
+
+    def сборка(_tools, _system, provider="", model=""):
+        построено.append(model)
+        if len(построено) == 1:
+            return ПодставнойАгент(ошибка=RuntimeError("модель легла"))
+        return ПодставнойАгент([кусок("Ответ по отчёту.")])
+
+    monkeypatch.setattr(loop.graph, "build", сборка)
+    поток = loop.run_stream(loop.Session(session_id="т"), build(ЗАПИСЬ), ЗАПИСЬ, "Вопрос")
+    события = [с async for с in поток]
+
+    assert построено == ["первая", "вторая"]
+    assert "error" not in [с.name for с in события]
+    assert "".join(с.data["text"] for с in события if с.name == "token") == "Ответ по отчёту."
+
+
+async def test_после_показанного_текста_запасной_путь_не_берётся(monkeypatch):
+    """Показанный текст переиграть нельзя: второй ответ поверх первого читался бы
+    как две разные оценки одной компании."""
+    from core.llm import Route
+
+    monkeypatch.setattr(
+        loop, "_routes", lambda: (Route("openrouter", "а"), Route("openrouter", "б"))
+    )
+    построено = []
+
+    def сборка(_tools, _system, provider="", model=""):
+        построено.append(model)
+        return ПодставнойАгент([кусок("Начал отвечать")], ошибка=RuntimeError("оборвалось"))
+
+    monkeypatch.setattr(loop.graph, "build", сборка)
+    поток = loop.run_stream(loop.Session(session_id="т"), build(ЗАПИСЬ), ЗАПИСЬ, "Вопрос")
+    события = [с async for с in поток]
+
+    assert построено == ["а"]
+    assert [с.name for с in события if с.name == "error"] == ["error"]
+
+
+async def test_молчание_первой_модели_переводит_на_следующую(monkeypatch):
+    """Молчание — такой же отказ, как ошибка: рассуждение способно съесть весь
+    бюджет ответа. Замерено на живом прогоне: один вопрос из десяти вернулся
+    пустым и на повторе ответил нормально."""
+    from core.llm import Route
+
+    monkeypatch.setattr(
+        loop, "_routes", lambda: (Route("openrouter", "а"), Route("openrouter", "б"))
+    )
+    построено = []
+
+    def сборка(_tools, _system, provider="", model=""):
+        построено.append(model)
+        куски = [кусок("")] if len(построено) == 1 else [кусок("Ответ.")]
+        return ПодставнойАгент(куски)
+
+    monkeypatch.setattr(loop.graph, "build", сборка)
+    поток = loop.run_stream(loop.Session(session_id="т"), build(ЗАПИСЬ), ЗАПИСЬ, "Вопрос")
+    события = [с async for с in поток]
+
+    assert построено == ["а", "б"]
+    assert "error" not in [с.name for с in события]
+
+
 async def test_пустой_ответ_это_ошибка_а_не_ответ(monkeypatch):
-    """У gpt-oss рассуждение тратит токены из того же лимита и способно съесть
-    весь бюджет. Пустой ответ после показанного вызова инструмента выглядит
+    """Рассуждение тратит токены из бюджета ответа и способно съесть его целиком.
+    Проверено на живом вызове: при 500 токенах ответа `deepseek v4 flash` вернул
+    пустую строку. Пустой ответ после показанного вызова инструмента выглядит
     как поломка, а не как «мне нечего сказать»."""
     события, _ = await прогнать(monkeypatch, ПодставнойАгент([кусок("")]))
 
@@ -136,7 +237,14 @@ async def test_вызов_инструмента_доходит_до_событ�
 
     события, _ = await прогнать(monkeypatch, ПодставнойАгент([вызов, итог, кусок("готово")]))
 
-    assert [с.name for с in события] == ["tool_start", "chart", "tool_end", "token", "done"]
+    assert [с.name for с in события] == [
+        "tool_start",
+        "chart",
+        "tool_end",
+        "token",
+        "check",
+        "done",
+    ]
 
 
 @нужен_набор
@@ -203,6 +311,11 @@ def test_обычная_ручка_отдаёт_добытое_инструме�
         "sections": ["courts"],
         "charts": ["balance"],
         "sources": [{"title": "Т", "url": "https://x", "snippet": ""}],
+        # То же, что в потоке приходит событиями `lookup` и `check`: без первого
+        # клиент не увидит данные, на которые опирается ответ, без второго —
+        # не отличит подтверждённое отчётом от неподтверждённого.
+        "lookups": [],
+        "check": {"total": 0, "unverified": [], "checked": False},
     }
 
 

@@ -7,7 +7,7 @@ import { InputDesktop } from '@alfalab/core-components-input/desktop';
 import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
 
 import { streamChat } from '../api';
-import type { CounterpartyReport, MessageBlock } from '../types';
+import type { AnswerCheck, CounterpartyReport, MessageBlock } from '../types';
 import { ChatMarkdown } from './ChatMarkdown';
 import { ToolBlock } from './ToolBlock';
 
@@ -23,6 +23,8 @@ type Message =
       blocks: MessageBlock[];
       sections: string[];
       streaming: boolean;
+      /** Итог сверки чисел с отчётом. Приходит после текста ответа. */
+      check?: AnswerCheck;
     }
   /** Сбой сервиса — отдельная роль, а не ответ: путать их нельзя. */
   | { id: string; role: 'failure'; text: string };
@@ -55,6 +57,38 @@ function suggestionPool(report: CounterpartyReport | null): string[] {
     'Что в отчёте не влияет на банковскую оценку?',
   );
   return [...new Set(questions)];
+}
+
+/**
+ * Чем подтверждён ответ.
+ *
+ * «Не выдумывает» — критерий приёмки кейса, и до этой строки он держался
+ * на формулировках промпта: пользователю нечем было отличить число из отчёта
+ * от придуманного. Неподтверждённое показывается, а не вычёркивается: нужны
+ * и утверждение, и сомнение в нём.
+ *
+ * Ответ без чисел не показывает ничего: «проверять было нечего» — не то же
+ * самое, что «подтверждено», и выдавать одно за другое нельзя.
+ */
+function AnswerCheckLine({ check }: { check: AnswerCheck }) {
+  if (check.total === 0) return null;
+  const confirmed = check.total - check.unverified.length;
+  return (
+    <div className={`answer-check${check.unverified.length ? ' answer-check--doubt' : ''}`}>
+      <span>
+        Числа сверены с отчётом: {confirmed} из {check.total}
+      </span>
+      {check.unverified.length > 0 && (
+        <ul>
+          {check.unverified.map((claim) => (
+            <li key={`${claim.number}-${claim.context}`}>
+              <b>{claim.number}</b> — в отчёте не нашлось: {claim.context}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function AnswerFeedback({ value, onChange }: {
@@ -113,6 +147,11 @@ export function ChatPanel({ report, onToast }: {
   /** Раскрытый вызов — один на всю ленту: развёрнутая страница и развёрнутый
    *  поиск разом выталкивают текст ответа с экрана. */
   const [openTool, setOpenTool] = useState<string | null>(null);
+  /** Раскрыт ли диалог на весь экран. Кейсодатель просил вынести агентскую часть
+   *  вперёд: «не стоит уделять внимание отрисовке текущих pdf в виде веб-аппки,
+   *  нужно сосредоточиться на сценарии агента». В колонке 408 пикселей вопрос
+   *  неудобно даже набрать. */
+  const [expanded, setExpanded] = useState(false);
   /** Внизу ли пользователь. Обновляется прокруткой, а не подсчётом при отрисовке. */
   const stickToBottom = useRef(true);
   const sessionId = useMemo(() => `s-${Math.random().toString(36).slice(2)}`, []);
@@ -139,9 +178,22 @@ export function ChatPanel({ report, onToast }: {
     setInput('');
     setAskedQuestions([]);
     setFeedback({});
+    setExpanded(false);
   }, [report?.inn]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Esc сворачивает — привычка, а не выдумка: так закрывается любое наложение.
+  // Переписка при этом остаётся, к отчёту возвращаются, чтобы проверить
+  // утверждение, и возвращаются в тот же разговор.
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExpanded(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expanded]);
 
   const ask = async (question: string) => {
     const clean = question.trim();
@@ -210,6 +262,17 @@ export function ChatPanel({ report, onToast }: {
           const call = lastCall();
           if (call) call.sources = event.data.items;
           schedule();
+        } else if (event.name === 'lookup') {
+          const call = lastCall();
+          if (call) call.lookup = event.data;
+          schedule();
+        } else if (event.name === 'check') {
+          const проверка = event.data;
+          setMessages((current) =>
+            current.map((m) =>
+              m.id === replyId && m.role === 'agent' ? { ...m, check: проверка } : m,
+            ),
+          );
         } else if (event.name === 'tool_end') {
           const call = lastCall();
           if (call) call.state = event.data.ok ? 'ok' : 'failed';
@@ -259,10 +322,26 @@ export function ChatPanel({ report, onToast }: {
   };
 
   return (
-    <aside
-      className={`chat-panel${messages.length === 0 ? ' chat-panel--empty' : ''}`}
-      aria-label="Чат об отчёте контрагента"
-    >
+    <>
+      {/* Подложка гасит отчёт, но оставляет его видимым: к нему возвращаются,
+          чтобы проверить утверждение, и он не должен исчезать совсем. */}
+      {expanded && (
+        <div
+          className="chat-backdrop"
+          aria-hidden="true"
+          onClick={() => setExpanded(false)}
+        />
+      )}
+      <aside
+        className={[
+          'chat-panel',
+          messages.length === 0 && !expanded ? 'chat-panel--empty' : '',
+          expanded ? 'chat-panel--expanded' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        aria-label="Чат об отчёте контрагента"
+      >
       <header className="chat-header">
         <div>
           <span className="ai-mark">AI</span>
@@ -273,6 +352,11 @@ export function ChatPanel({ report, onToast }: {
             <small>Задайте вопрос своими словами</small>
           </div>
         </div>
+        {expanded && (
+          <ButtonDesktop size={32} view="text" onClick={() => setExpanded(false)}>
+            Свернуть
+          </ButtonDesktop>
+        )}
       </header>
 
       <div
@@ -339,6 +423,7 @@ export function ChatPanel({ report, onToast }: {
                   })}
                 </div>
               )}
+              {message.check && <AnswerCheckLine check={message.check} />}
               <AnswerFeedback
                 value={feedback[message.id]}
                 onChange={(next) => setFeedback((current) => ({ ...current, [message.id]: next }))}
@@ -391,6 +476,9 @@ export function ChatPanel({ report, onToast }: {
           placeholder={report ? 'Напишите вопрос по отчёту' : 'Чат доступен с отчётом сервера'}
           aria-label="Вопрос по отчёту"
           onChange={(_, { value }) => setInput(value)}
+          // Раскрытие по постановке курсора, а не по отдельной кнопке: намерение
+          // задать вопрос выражается тем, что человек ставит курсор в поле.
+          onFocus={() => setExpanded(true)}
         />
         <IconButtonDesktop
           size={48}
@@ -403,6 +491,7 @@ export function ChatPanel({ report, onToast }: {
           title="Отправить вопрос"
         />
       </form>
-    </aside>
+      </aside>
+    </>
   );
 }

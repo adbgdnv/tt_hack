@@ -222,4 +222,17 @@ async def chat(request: ChatRequest) -> dict:
         "sections": list(answer.sections),
         "charts": list(answer.charts),
         "sources": list(answer.sources),
+        # То, что в потоке приходит событиями `lookup` и `check`. Без первого
+        # клиент не увидел бы данные, на которые опирается ответ; без второго —
+        # не отличил бы подтверждённое отчётом от неподтверждённого.
+        "lookups": list(answer.lookups),
+        "check": {
+            "total": len(answer.check.claims),
+            "unverified": [
+                {"number": c.number, "context": c.context}
+                for c in answer.check.claims
+                if not c.found
+            ],
+            "checked": answer.check.checked,
+        },
     }

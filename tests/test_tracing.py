@@ -19,8 +19,10 @@ from core.llm import Answer, LLMClient, environment
 
 @pytest.fixture
 def клиент(monkeypatch):
-    monkeypatch.setenv("LLM_API_KEY", "тестовый-ключ")
-    return LLMClient()
+    monkeypatch.setenv("GROQ_API_KEY", "тестовый-ключ")
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    return LLMClient(provider="groq")
 
 
 class ЗаписанныйВызов:
@@ -88,7 +90,11 @@ def test_инн_и_окружение_уходят_в_запись(клиент,
     клиент.ask([{"role": "user", "content": "вопрос"}], inn="5032257375")
 
     _, config = модель.вызовы[0]
-    assert config["metadata"] == {"environment": "local", "inn": "5032257375"}
+    assert config["metadata"] == {
+        "environment": "local",
+        "inn": "5032257375",
+        "provider": "groq",
+    }
     assert config["run_name"] == "counterparty-chat"
 
 

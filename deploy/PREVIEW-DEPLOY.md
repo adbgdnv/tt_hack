@@ -105,9 +105,15 @@ install -d -o www-data -g www-data -m 750 /opt/tt-hack/dataset
 
 Этот файл **пишет автодеплой** — шаг «Прокинуть окружение бэкенда» в
 [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) кладёт туда
-`API_ROOT_PATH`, `LLM_PROVIDER` (repository variable) и `LLM_API_KEY`
-(repository secret). Ключ уходит через stdin, а не аргументом команды: аргументы
-видны в `ps` на сервере.
+`API_ROOT_PATH`, `LLM_PROVIDER` (repository variable, по умолчанию `openrouter`),
+`OPENROUTER_API_KEY`, `GROQ_API_KEY` и `LLM_API_KEY` (repository secrets).
+Ключи уходят через stdin, а не аргументом команды: аргументы видны в `ps`
+на сервере.
+
+Провайдеров два по порядку отхода: OpenRouter с двумя моделями кейсодателя,
+Groq последним. Достаточно любого одного ключа — без ключей шаг просто
+пропускается. Именной ключ сильнее общего `LLM_API_KEY`, который принадлежит
+провайдеру из `LLM_PROVIDER`.
 
 Поэтому файл принадлежит `ttdeploy` с правами `600` — это единственное, что деплой-пользователь
 может писать за пределами `/opt/tt-hack-preview`. Каталог `/opt/tt-hack` остаётся

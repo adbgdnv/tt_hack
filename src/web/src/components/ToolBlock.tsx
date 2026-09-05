@@ -46,7 +46,7 @@ export function ToolBlock({
 }) {
   // Пока вызов идёт, показывать нечего — раскрывать нечего.
   const openable = call.state !== 'running';
-  const hasBody = Boolean(chart) || Boolean(call.sources?.length);
+  const hasBody = Boolean(chart) || Boolean(call.sources?.length) || Boolean(call.lookup);
 
   return (
     <div className={`tool-block tool-block--${call.state}`}>
@@ -73,6 +73,12 @@ export function ToolBlock({
             <div className="tool-block__chart">
               <ReportChart spec={chart} />
             </div>
+          )}
+
+          {/* Взятое по теме показывается целиком и словами словаря. Иначе модель
+              опирается на данные, которых нет на экране, и проверить ответ нечем. */}
+          {call.lookup && (
+            <pre className="tool-block__lookup">{call.lookup.text}</pre>
           )}
 
           {call.sources && call.sources.length > 0 && (
