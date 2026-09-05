@@ -171,7 +171,7 @@ async def run(
     state.focus(report.inn)
     charts = {c.key: c for c in build_charts(record)}
     agent = graph.build(
-        tools or [], prompt.system_prompt(report, [c.title for c in charts.values()])
+        tools or [], prompt.system_prompt(report, [c.title for c in charts.values()], question)
     )
     result = await agent.ainvoke(
         {"messages": prompt.conversation(question, state.history)},
@@ -218,7 +218,7 @@ async def run_stream(
     state.focus(report.inn)
     charts = {c.key: c for c in build_charts(record)}
     titles = [c.title for c in charts.values()]
-    agent = graph.build(tools or [], prompt.system_prompt(report, titles))
+    agent = graph.build(tools or [], prompt.system_prompt(report, titles, question))
     translator = events.Translator(charts)
 
     said: list[str] = []

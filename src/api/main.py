@@ -68,6 +68,10 @@ def _serialize(report: report_view.Report) -> dict:
     payload = asdict(report)
     for section in payload["sections"]:
         section["state"] = section["state"].value
+    # Пути внутри данных в интерфейс не уходят: `fields` — это то, чем триггер
+    # проверяется, а на экране пользователь видит слова (FR-013).
+    for триггер in payload.get("triggers", []):
+        триггер.pop("fields", None)
     return payload
 
 

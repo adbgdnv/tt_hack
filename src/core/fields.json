@@ -1,0 +1,1261 @@
+{
+  "meta": {
+    "источник": "data/GetFullReportResponse.md",
+    "компаний_в_наборе": 200,
+    "полей": 114,
+    "из_спецификации": 103,
+    "своих": 11,
+    "без_описания": 0
+  },
+  "fields": {
+    "arbitrationByStatus.commonAmount": {
+      "label": "Общая сумма по арбитражным делам",
+      "description": "Общая сумма по арбитражным делам",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 107
+    },
+    "arbitrationByStatus.commonCount": {
+      "label": "Общее количество арбитражных дел",
+      "description": "Общее количество арбитражных дел",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 109
+    },
+    "arbitrationByStatus.defandantArbitration.defandantArbitrationAppealed.daAmount": {
+      "label": "Сумма требований по обжалуемым делам, где компания ответчик",
+      "description": "Сумма требований по обжалуемым делам, где компания ответчик",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 9
+    },
+    "arbitrationByStatus.defandantArbitration.defandantArbitrationAppealed.daCount": {
+      "label": "Обжалуемых дел, где компания ответчик",
+      "description": "Обжалуемых дел, где компания ответчик",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 10
+    },
+    "arbitrationByStatus.defandantArbitration.defandantArbitrationFinished.dfAmount": {
+      "label": "Сумма требований по завершённым делам, где компания ответчик",
+      "description": "Сумма требований по завершённым делам, где компания ответчик",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 76
+    },
+    "arbitrationByStatus.defandantArbitration.defandantArbitrationFinished.dfCount": {
+      "label": "Кол-во закрытых дел в качестве ответчика",
+      "description": "Кол-во закрытых дел в качестве ответчика",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 80
+    },
+    "arbitrationByStatus.defandantArbitration.defandantArbitrationPending.dpAmount": {
+      "label": "Сумма требований по рассматриваемым делам, где компания ответчик",
+      "description": "Сумма требований по рассматриваемым делам, где компания ответчик",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 23
+    },
+    "arbitrationByStatus.defandantArbitration.defandantArbitrationPending.dpCount": {
+      "label": "Рассматриваемых дел, где компания ответчик",
+      "description": "Рассматриваемых дел, где компания ответчик",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 27
+    },
+    "arbitrationByStatus.plaintiffArbitration.plaintiffArbitrationAppealed.paAmount": {
+      "label": "Сумма требований по обжалуемым делам, где компания истец",
+      "description": "Сумма требований по обжалуемым делам, где компания истец",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 5
+    },
+    "arbitrationByStatus.plaintiffArbitration.plaintiffArbitrationAppealed.paCount": {
+      "label": "Обжалуемых дел, где компания истец",
+      "description": "Обжалуемых дел, где компания истец",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 5
+    },
+    "arbitrationByStatus.plaintiffArbitration.plaintiffArbitrationFinished.pfAmount": {
+      "label": "Сумма требований по завершённым делам, где компания истец",
+      "description": "Сумма требований по завершённым делам, где компания истец",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 71
+    },
+    "arbitrationByStatus.plaintiffArbitration.plaintiffArbitrationFinished.pfCount": {
+      "label": "Кол-во закрытых дел в качестве истца",
+      "description": "Кол-во закрытых дел в качестве истца",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 75
+    },
+    "arbitrationByStatus.plaintiffArbitration.plaintiffArbitrationPending.ppAmount": {
+      "label": "Сумма требований по рассматриваемым делам, где компания истец",
+      "description": "Сумма требований по рассматриваемым делам, где компания истец",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 25
+    },
+    "arbitrationByStatus.plaintiffArbitration.plaintiffArbitrationPending.ppCount": {
+      "label": "Рассматриваемых дел, где компания истец",
+      "description": "Рассматриваемых дел, где компания истец",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "суды"
+      ],
+      "filled": 27
+    },
+    "arbitrationCases[].defendantAmount": {
+      "label": "Сумма исков, предъявленных компании",
+      "description": "Сумма по делам, где контрагент — ответчик",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 101
+    },
+    "arbitrationCases[].defendantCount": {
+      "label": "Количество дел, где контрагент — ответчик",
+      "description": "Количество дел, где контрагент — ответчик",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 101
+    },
+    "arbitrationCases[].plaintiffAmount": {
+      "label": "Сумма исков, поданных компанией",
+      "description": "Сумма по делам, где контрагент — истец",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 101
+    },
+    "arbitrationCases[].plaintiffCount": {
+      "label": "Количество дел, где контрагент — истец",
+      "description": "Количество дел, где контрагент — истец",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 101
+    },
+    "arbitrationCases[].year": {
+      "label": "Год",
+      "description": "Год",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "суды"
+      ],
+      "filled": 101
+    },
+    "baseInfo.address": {
+      "label": "Юридический адрес",
+      "description": "Юридический адрес",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 150
+    },
+    "baseInfo.companySize": {
+      "label": "Описание размера организации (например, «Микропредприятие»)",
+      "description": "Описание размера организации (например, «Микропредприятие»)",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 120
+    },
+    "baseInfo.email": {
+      "label": "E-mail компании",
+      "description": "E-mail компании",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 77
+    },
+    "baseInfo.fullName": {
+      "label": "Полное наименование контрагента",
+      "description": "Полное наименование контрагента",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.inn": {
+      "label": "ИНН организации",
+      "description": "ИНН организации",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.kpp": {
+      "label": "КПП контрагента",
+      "description": "КПП контрагента",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 150
+    },
+    "baseInfo.ogrn": {
+      "label": "ОГРН организации",
+      "description": "ОГРН организации",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.okpo": {
+      "label": "ОКПО контрагента",
+      "description": "ОКПО контрагента",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.registrationInfo.registrationDate": {
+      "label": "Дата регистрации организации",
+      "description": "Дата регистрации организации",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.registrationInfo.yearsFromRegistration": {
+      "label": "Сколько лет существует компания",
+      "description": "Сколько лет существует компания",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.riskLevel": {
+      "label": "Уровень риска контрагента: `LOW` / `MEDIUM` / `HIGH`",
+      "description": "Уровень риска контрагента: `LOW` / `MEDIUM` / `HIGH`",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.shortName": {
+      "label": "Краткое наименование контрагента",
+      "description": "Краткое наименование контрагента",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 200
+    },
+    "baseInfo.website": {
+      "label": "Адрес сайта компании",
+      "description": "Адрес сайта компании",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 34
+    },
+    "branchesInfo.branchesCount": {
+      "label": "Количество филиалов",
+      "description": "Количество филиалов",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "реквизиты"
+      ],
+      "filled": 8
+    },
+    "branchesInfo.branches[].address": {
+      "label": "Юридический адрес филиала",
+      "description": "Юридический адрес филиала",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "реквизиты"
+      ],
+      "filled": 7
+    },
+    "branchesInfo.branches[].name": {
+      "label": "Наименование филиала",
+      "description": "Наименование филиала",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "реквизиты"
+      ],
+      "filled": 5
+    },
+    "coefficient.profitability": {
+      "label": "Коэффициент рентабельности",
+      "description": "Коэффициент рентабельности",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 47
+    },
+    "coefficient.solvency": {
+      "label": "Коэффициент платёжеспособности",
+      "description": "Коэффициент платёжеспособности",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 47
+    },
+    "coefficient.sustainability": {
+      "label": "Коэффициент финансовой устойчивости",
+      "description": "Коэффициент финансовой устойчивости",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 47
+    },
+    "coefficient.year": {
+      "label": "Год расчёта коэффициентов",
+      "description": "Год расчёта коэффициентов",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 47
+    },
+    "executionProceedings[].active": {
+      "label": "Признак действующего производства",
+      "description": "Признак активности исполнительного производства",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "взыскания",
+        "суды"
+      ],
+      "filled": 96
+    },
+    "executionProceedings[].amount": {
+      "label": "Сумма исполнительного производства",
+      "description": "Сумма исполнительного производства",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "взыскания",
+        "суды"
+      ],
+      "filled": 64
+    },
+    "executionProceedings[].date": {
+      "label": "Дата возбуждения производства",
+      "description": "Дата исполнительного производства",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "взыскания",
+        "суды"
+      ],
+      "filled": 96
+    },
+    "executionProceedings[].number": {
+      "label": "Номер исполнительного производства",
+      "description": "Номер исполнительного производства",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "взыскания",
+        "суды"
+      ],
+      "filled": 96
+    },
+    "finReports[].assets.currentAssets.bankroll": {
+      "label": "Денежные средства",
+      "description": "Денежные средства и эквиваленты",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 131
+    },
+    "finReports[].assets.currentAssets.receivables": {
+      "label": "Дебиторская задолженность",
+      "description": "Дебиторская задолженность",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 126
+    },
+    "finReports[].assets.currentAssets.stocks": {
+      "label": "Запасы",
+      "description": "Запасы",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 110
+    },
+    "finReports[].assets.currentAssets.total": {
+      "label": "Общая сумма оборотных активов",
+      "description": "Общая сумма оборотных активов",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 66
+    },
+    "finReports[].assets.totalAssets": {
+      "label": "Активы",
+      "description": "Общая сумма всех активов",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 136
+    },
+    "finReports[].assets.uncurrentAssets.fixedAssets": {
+      "label": "Основные средства",
+      "description": "Основные средства",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 81
+    },
+    "finReports[].assets.uncurrentAssets.total": {
+      "label": "Внеоборотные активы",
+      "description": "Общая сумма внеоборотных активов",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 49
+    },
+    "finReports[].common.proceeds": {
+      "label": "Выручка",
+      "description": "Выручка",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 122
+    },
+    "finReports[].common.profit": {
+      "label": "Прибыль",
+      "description": "Прибыль (убыток)",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 59
+    },
+    "finReports[].common.year": {
+      "label": "Год отчётности",
+      "description": "Год",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 136
+    },
+    "finReports[].liabilities.capitals": {
+      "label": "Собственный капитал",
+      "description": "Капиталы и резервы",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 134
+    },
+    "finReports[].liabilities.longTermDuties.others": {
+      "label": "Прочие долгосрочные обязательства",
+      "description": "Прочие долгосрочные обязательства",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 31
+    },
+    "finReports[].liabilities.longTermDuties.total": {
+      "label": "Общая сумма долгосрочных обязательств",
+      "description": "Общая сумма долгосрочных обязательств",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 41
+    },
+    "finReports[].liabilities.shortTermLiabilities.accountsPayable": {
+      "label": "Кредиторская задолженность",
+      "description": "Кредиторская задолженность",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 126
+    },
+    "finReports[].liabilities.shortTermLiabilities.borrowedFunds": {
+      "label": "Заёмные средства",
+      "description": "Краткосрочно-заёмные средства",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 51
+    },
+    "finReports[].liabilities.shortTermLiabilities.total": {
+      "label": "Общая сумма краткосрочных обязательств",
+      "description": "Общая сумма краткосрочных обязательств",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 59
+    },
+    "finReports[].liabilities.totalLiabilities": {
+      "label": "Пассивы",
+      "description": "Всего пассивов",
+      "origin": "spec",
+      "section": "finances",
+      "tags": [
+        "Финансовые показатели",
+        "финансы"
+      ],
+      "filled": 136
+    },
+    "foundersInfo.authPerson.inn": {
+      "label": "ИНН руководителя",
+      "description": "ИНН руководителя",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 150
+    },
+    "foundersInfo.authPerson.name": {
+      "label": "ФИО руководителя организации",
+      "description": "ФИО руководителя организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 150
+    },
+    "foundersInfo.authPerson.positionDate": {
+      "label": "Дата вступления в должность",
+      "description": "Дата вступления в должность",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 150
+    },
+    "foundersInfo.authPerson.positionName": {
+      "label": "Должность руководителя",
+      "description": "Должность руководителя",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 150
+    },
+    "foundersInfo.cofounders[].active": {
+      "label": "Признак, является ли учредитель активным",
+      "description": "Признак, является ли учредитель активным",
+      "origin": "own",
+      "section": "",
+      "tags": [
+        "управление"
+      ],
+      "filled": 144,
+      "conflict": "В спецификации поле называется `isActive`, в данных — `active`"
+    },
+    "foundersInfo.cofounders[].amount": {
+      "label": "Сумма доли учредителя в капитале",
+      "description": "Сумма доли учредителя в капитале",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 144
+    },
+    "foundersInfo.cofounders[].dateFrom": {
+      "label": "Дата вхождения в состав учредителей",
+      "description": "Дата вхождения в состав учредителей",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 144
+    },
+    "foundersInfo.cofounders[].inn": {
+      "label": "ИНН учредителя",
+      "description": "ИНН учредителя",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 139
+    },
+    "foundersInfo.cofounders[].name": {
+      "label": "ФИО учредителя",
+      "description": "ФИО учредителя",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 143
+    },
+    "foundersInfo.cofounders[].share": {
+      "label": "Доля учредителя в процентах",
+      "description": "Доля учредителя в процентах",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 144
+    },
+    "foundersInfo.shareCapital": {
+      "label": "Уставной капитал",
+      "description": "Уставной капитал",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 144
+    },
+    "inspections[].authorityName": {
+      "label": "Наименование контролирующего органа",
+      "description": "Наименование контролирующего органа",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 59
+    },
+    "inspections[].endDate": {
+      "label": "Дата окончания проверки",
+      "description": "Дата окончания проверки",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 31
+    },
+    "inspections[].erpId": {
+      "label": "Идентификатор проверки",
+      "description": "Идентификатор проверки",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 59
+    },
+    "inspections[].form": {
+      "label": "Форма проверки",
+      "description": "Форма проверки",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 59
+    },
+    "inspections[].inspectionStatus": {
+      "label": "Статус проверки (предстоящая / завершена без нарушений / завершена с нарушениями / результат неизвестен / отменена)",
+      "description": "Статус проверки (предстоящая / завершена без нарушений / завершена с нарушениями / результат неизвестен / отменена)",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 59
+    },
+    "inspections[].startDate": {
+      "label": "Дата начала проверки",
+      "description": "Дата начала проверки",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 59
+    },
+    "inspections[].type": {
+      "label": "Тип проверки",
+      "description": "Тип проверки",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "надёжность"
+      ],
+      "filled": 6
+    },
+    "kindsOfActivityInfo.mainKindOfActivity.code": {
+      "label": "Код ОКВЭД основного вида деятельности",
+      "description": "Код ОКВЭД основного вида деятельности",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "деятельность"
+      ],
+      "filled": 200
+    },
+    "kindsOfActivityInfo.mainKindOfActivity.description": {
+      "label": "Название основного вида деятельности",
+      "description": "Название основного вида деятельности",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "деятельность"
+      ],
+      "filled": 200
+    },
+    "kindsOfActivityInfo.otherKindsOfActivity[].code": {
+      "label": "Код ОКВЭД дополнительного вида деятельности",
+      "description": "Код ОКВЭД дополнительного вида деятельности",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "деятельность"
+      ],
+      "filled": 195
+    },
+    "kindsOfActivityInfo.otherKindsOfActivity[].description": {
+      "label": "Название дополнительного вида деятельности",
+      "description": "Название дополнительного вида деятельности",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "деятельность"
+      ],
+      "filled": 195
+    },
+    "licenses[].endDate": {
+      "label": "Дата окончания действия лицензии",
+      "description": "Дата окончания действия лицензии",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "деятельность"
+      ],
+      "filled": 2
+    },
+    "licenses[].issueDate": {
+      "label": "Дата выдачи лицензии",
+      "description": "Дата выдачи лицензии",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "деятельность"
+      ],
+      "filled": 22
+    },
+    "licenses[].issuingAuthority": {
+      "label": "Орган, выдавший лицензию",
+      "description": "Орган, выдавший лицензию",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "деятельность"
+      ],
+      "filled": 22
+    },
+    "licenses[].name": {
+      "label": "Название лицензии",
+      "description": "Название лицензии",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "деятельность"
+      ],
+      "filled": 22
+    },
+    "licenses[].number": {
+      "label": "Номер лицензии",
+      "description": "Номер лицензии",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "деятельность"
+      ],
+      "filled": 22
+    },
+    "licenses[].status": {
+      "label": "Статус лицензии: `ACTIVE` / `EXPIRED` / `INDEFINITE`",
+      "description": "Статус лицензии: `ACTIVE` / `EXPIRED` / `INDEFINITE`",
+      "origin": "spec",
+      "section": "courts",
+      "tags": [
+        "Юридические риски",
+        "деятельность"
+      ],
+      "filled": 22
+    },
+    "phones[].phoneCode": {
+      "label": "Код телефона",
+      "description": "Код телефона",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 60
+    },
+    "phones[].phoneNumber": {
+      "label": "Номер телефона",
+      "description": "Номер телефона",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "реквизиты"
+      ],
+      "filled": 60
+    },
+    "procurements[].contractSignedAmt": {
+      "label": "Сумма подписанных контрактов",
+      "description": "Сумма подписанных контрактов",
+      "origin": "spec",
+      "section": "activity",
+      "tags": [
+        "Госзакупки",
+        "деятельность"
+      ],
+      "filled": 15
+    },
+    "procurements[].contractSignedCnt": {
+      "label": "Количество подписанных контрактов",
+      "description": "Количество подписанных контрактов",
+      "origin": "spec",
+      "section": "activity",
+      "tags": [
+        "Госзакупки",
+        "деятельность"
+      ],
+      "filled": 17
+    },
+    "procurements[].federalLawCode": {
+      "label": "Код федерального закона",
+      "description": "Код федерального закона",
+      "origin": "spec",
+      "section": "activity",
+      "tags": [
+        "Госзакупки",
+        "деятельность"
+      ],
+      "filled": 17
+    },
+    "procurements[].procurementsYear": {
+      "label": "Год проведения госзакупки",
+      "description": "Год проведения госзакупки",
+      "origin": "spec",
+      "section": "activity",
+      "tags": [
+        "Госзакупки",
+        "деятельность"
+      ],
+      "filled": 17
+    },
+    "procurements[].tenderWinnerCnt": {
+      "label": "Количество тендеров, в которых контрагент выиграл",
+      "description": "Количество тендеров, в которых контрагент выиграл",
+      "origin": "spec",
+      "section": "activity",
+      "tags": [
+        "Госзакупки",
+        "деятельность"
+      ],
+      "filled": 17
+    },
+    "relatedCompanies[].authPersonName": {
+      "label": "ФИО руководителя связанной организации",
+      "description": "ФИО руководителя связанной организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 86
+    },
+    "relatedCompanies[].authPersonPosition": {
+      "label": "Должность руководителя связанной организации",
+      "description": "Должность руководителя связанной организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 86
+    },
+    "relatedCompanies[].inn": {
+      "label": "ИНН связанной организации",
+      "description": "ИНН связанной организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 126
+    },
+    "relatedCompanies[].name": {
+      "label": "Краткое наименование связанной организации",
+      "description": "Краткое наименование связанной организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 126
+    },
+    "relatedCompanies[].ogrn": {
+      "label": "ОГРН связанной организации",
+      "description": "ОГРН связанной организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 126
+    },
+    "relatedCompanies[].registrationDate": {
+      "label": "Дата регистрации связанной организации",
+      "description": "Дата регистрации связанной организации",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "управление"
+      ],
+      "filled": 86
+    },
+    "reportDate": {
+      "label": "Дата формирования отчёта",
+      "description": "Дата формирования отчёта",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация"
+      ],
+      "filled": 200
+    },
+    "reputationalRisks.negative[].chapter": {
+      "label": "Раздел, к которому относится фактор",
+      "description": "Раздел, к которому относится фактор",
+      "origin": "spec",
+      "section": "registries",
+      "tags": [
+        "Репутационные риски",
+        "надёжность"
+      ],
+      "filled": 117
+    },
+    "reputationalRisks.negative[].code": {
+      "label": "Код негативного репутационного фактора",
+      "description": "Код негативного репутационного фактора",
+      "origin": "spec",
+      "section": "registries",
+      "tags": [
+        "Репутационные риски",
+        "надёжность"
+      ],
+      "filled": 117
+    },
+    "reputationalRisks.negative[].name": {
+      "label": "Описание негативного репутационного фактора",
+      "description": "Описание негативного репутационного фактора",
+      "origin": "spec",
+      "section": "registries",
+      "tags": [
+        "Репутационные риски",
+        "надёжность"
+      ],
+      "filled": 117
+    },
+    "reputationalRisks.positive[].chapter": {
+      "label": "Раздел, к которому относится фактор",
+      "description": "Раздел, к которому относится фактор",
+      "origin": "spec",
+      "section": "registries",
+      "tags": [
+        "Репутационные риски",
+        "надёжность"
+      ],
+      "filled": 200
+    },
+    "reputationalRisks.positive[].code": {
+      "label": "Код позитивного репутационного фактора",
+      "description": "Код позитивного репутационного фактора",
+      "origin": "spec",
+      "section": "registries",
+      "tags": [
+        "Репутационные риски",
+        "надёжность"
+      ],
+      "filled": 200
+    },
+    "reputationalRisks.positive[].name": {
+      "label": "Описание позитивного репутационного фактора",
+      "description": "Описание позитивного репутационного фактора",
+      "origin": "spec",
+      "section": "registries",
+      "tags": [
+        "Репутационные риски",
+        "надёжность"
+      ],
+      "filled": 200
+    },
+    "status.date": {
+      "label": "Дата последнего обновления статуса",
+      "description": "Дата последнего обновления статуса",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "надёжность"
+      ],
+      "filled": 200
+    },
+    "status.reasonName": {
+      "label": "Причина закрытия организации",
+      "description": "Причина закрытия организации",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "надёжность"
+      ],
+      "filled": 6,
+      "conflict": "Спецификация описывает поле как «Причина закрытия организации», но в данных оно заполнено у действующих компаний и содержит в том числе «признано несостоятельным (банкротом)». Верим данным"
+    },
+    "status.status": {
+      "label": "Статус организации: `CURRENT` (действующая) / `CLOSED` (ликвидированная)",
+      "description": "Статус организации: `CURRENT` (действующая) / `CLOSED` (ликвидированная)",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация",
+        "надёжность"
+      ],
+      "filled": 200
+    },
+    "taxSystem[].fullName": {
+      "label": "Полное название режима налогообложения",
+      "description": "Полное название режима налогообложения",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "деятельность",
+        "налоги"
+      ],
+      "filled": 150
+    },
+    "taxSystem[].shortName": {
+      "label": "Краткое название режима налогообложения",
+      "description": "Краткое название режима налогообложения",
+      "origin": "spec",
+      "section": "management",
+      "tags": [
+        "Учредители, руководство, структура",
+        "деятельность",
+        "налоги"
+      ],
+      "filled": 150
+    },
+    "zskRiskLevel": {
+      "label": "Уровень риска «Знай своего клиента»: `GREEN` / `YELLOW` / `RED (в интерфейс выводится Green/grey/grey)`",
+      "description": "Уровень риска «Знай своего клиента»: `GREEN` / `YELLOW` / `RED (в интерфейс выводится Green/grey/grey)`",
+      "origin": "spec",
+      "section": "registration",
+      "tags": [
+        "Общая информация"
+      ],
+      "filled": 200
+    }
+  }
+}

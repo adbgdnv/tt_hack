@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.fields import describe
+
 Number = float | int | None
 
 
@@ -39,7 +41,11 @@ class ChartSpec:
     form: str  # "lines" — ряд по годам, "bars" — сравнение величин
     labels: tuple[str, ...]
     series: tuple[Series, ...]
-    source: str  # из каких полей отчёта построено
+    # Подпись источника словами, а не путём внутри данных. Раньше здесь стояло
+    # `finReports[].assets.currentAssets.{stocks,receivables,bankroll}` — путь
+    # JSON, показанный пользователю. Слова берутся из словаря полей, чтобы
+    # у одного поля было одно название по всему продукту.
+    source: str
 
 
 MIN_POINTS = 2
@@ -146,7 +152,7 @@ def revenue_assets(record: dict) -> ChartSpec | None:
                 tuple(_num((f.get("assets") or {}).get("totalAssets")) for f in with_revenue),
             ),
         ],
-        source="finReports[].common.proceeds, finReports[].assets.totalAssets",
+        source=describe(["finReports[].common.proceeds", "finReports[].assets.totalAssets"]),
     )
 
 
@@ -171,7 +177,10 @@ def balance(record: dict) -> ChartSpec | None:
         title="Чем обеспечены активы",
         pairs=[("Собственный капитал", capitals), ("Обязательства", max(total - capitals, 0))],
         unit="₽",
-        source="finReports[].liabilities.capitals, .totalLiabilities",
+        source=describe([
+            "finReports[].liabilities.capitals",
+            "finReports[].liabilities.totalLiabilities",
+        ]),
     )
 
 
@@ -215,7 +224,7 @@ def plaintiff_defendant(record: dict) -> ChartSpec | None:
         title="В какой роли судится",
         pairs=[("Как истец", as_plaintiff), ("Как ответчик", as_defendant)],
         unit="₽",
-        source="arbitrationByStatus.plaintiffArbitration, .defandantArbitration",
+        source="Суммы исков по арбитражным делам, в разбивке по роли компании",
     )
 
 
@@ -235,7 +244,10 @@ def arbitration_years(record: dict) -> ChartSpec | None:
             Series("Как истец", "₽", tuple(_num(c.get("plaintiffAmount")) or 0 for c in cases)),
             Series("Как ответчик", "₽", tuple(_num(c.get("defendantAmount")) or 0 for c in cases)),
         ],
-        source="arbitrationCases[].plaintiffAmount, .defendantAmount",
+        source=describe([
+            "arbitrationCases[].plaintiffAmount",
+            "arbitrationCases[].defendantAmount",
+        ]),
     )
 
 
@@ -253,7 +265,7 @@ def proceedings(record: dict) -> ChartSpec | None:
         title="Исполнительные производства",
         pairs=[("Активные", active), ("Завершённые", len(items) - active)],
         unit="",
-        source="executionProceedings[].active",
+        source=describe(["executionProceedings[].active"]),
     )
 
 
@@ -275,7 +287,7 @@ def profit_years(record: dict) -> ChartSpec | None:
         title="Прибыль по годам",
         labels=[str(f["common"]["year"]) for f in years],
         series=[Series("Прибыль", "₽", tuple(_num(f["common"].get("profit")) for f in years))],
-        source="finReports[].common.profit",
+        source=describe(["finReports[].common.profit"]),
     )
 
 
@@ -322,7 +334,9 @@ def asset_mix(record: dict) -> ChartSpec | None:
         title="Из чего состоят оборотные активы",
         pairs=pairs,
         unit="₽",
-        source="finReports[].assets.currentAssets.{stocks,receivables,bankroll}",
+        source=describe(["finReports[].assets.currentAssets.stocks",
+                         "finReports[].assets.currentAssets.receivables",
+                         "finReports[].assets.currentAssets.bankroll"]),
     )
 
 
@@ -348,7 +362,8 @@ def liability_mix(record: dict) -> ChartSpec | None:
         title="Из чего состоят краткосрочные обязательства",
         pairs=pairs,
         unit="₽",
-        source="finReports[].liabilities.shortTermLiabilities.{accountsPayable,borrowedFunds}",
+        source=describe(["finReports[].liabilities.shortTermLiabilities.accountsPayable",
+                         "finReports[].liabilities.shortTermLiabilities.borrowedFunds"]),
     )
 
 
@@ -403,7 +418,7 @@ def case_outcome(record: dict) -> ChartSpec | None:
         title="Чем закончились дела",
         pairs=pairs,
         unit="",
-        source="arbitrationByStatus.*Arbitration.*{Finished,Pending,Appealed}",
+        source="Счётчики арбитражных дел по статусу рассмотрения",
     )
 
 
@@ -435,8 +450,8 @@ def proceedings_years(record: dict) -> ChartSpec | None:
         title="Когда возбуждались производства",
         labels=years,
         series=[Series("Производств", "", tuple(by_year[y] for y in years))],
-        source="executionProceedings[].date"
-        + (f" (последние {PROCEEDINGS_YEARS} лет из {len(by_year)})" if усечено else ""),
+        source=describe(["executionProceedings[].date"])
+        + (f" — показаны последние {PROCEEDINGS_YEARS} лет из {len(by_year)}" if усечено else ""),
     )
 
 

@@ -31,6 +31,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# Словарь полей едет вместе с пакетом. Сейчас образ запускается с PYTHONPATH
+# на исходники, и файл находится рядом с модулем; это на случай, если путь
+# когда-нибудь уберут и `core` начнёт импортироваться из site-packages.
+[tool.setuptools.package-data]
+core = ["fields.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # "." — чтобы tests/test_vibe_debug_server.py видел пакет scripts/

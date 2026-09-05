@@ -17,6 +17,7 @@ import { Brand } from './components/Brand';
 import { CompletionBar } from './components/CompletionBar';
 import { NewsBlock } from './components/NewsBlock';
 import { SourceLights } from './components/SourceLights';
+import { TriggersBlock } from './components/TriggersBlock';
 import { VerdictBanner } from './components/VerdictBanner';
 // Отложенно: чат нужен только на экране компании, а тянет за собой разбор
 // разметки — 51 КБ в сжатии. На первом экране это чистый простой.
@@ -298,6 +299,14 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
                     zsk={{ known: zskKnown, value: zskValue }}
                   />
                   <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />
+
+                  {/* Противоречия сразу под вердиктом: это то, ради чего
+                      пользователь пришёл, и читать до них восемь карточек
+                      он не должен. Блока нет только у старого сервера,
+                      который о них не знает. */}
+                  {report && (
+                    <TriggersBlock triggers={report.triggers ?? []} onOpenSection={onOpenBlock} />
+                  )}
 
                   <div className="blocks-heading">
                     <div>

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from core.report import Report, State
+from core.triggers import order_for
 
 SYSTEM_PROMPT = """<ROLE>
 Ты помогаешь предпринимателю разобраться в отчёте о контрагенте. Пользователь
@@ -198,7 +199,7 @@ _STATE_WORDS = {
 }
 
 
-def render_report(report: Report) -> str:
+def render_report(report: Report, triggers: tuple | None = None) -> str:
     """Отчёт в текст для модели — ровно то, что видит пользователь на экране.
 
     Формат плотный: у провайдера лимит считает вход, а отчёт со всеми разделами
@@ -244,10 +245,27 @@ def render_report(report: Report) -> str:
                 # оно там совпадает с заголовком и повторять его незачем.
                 подпись = chart.title if chart.form == "bars" else f"{chart.title} — {ряд.name}"
                 lines.append(f"    {подпись}: {значения}")
+
+    # Противоречия между блоками — отдельным списком после разделов.
+    #
+    # В сами разделы они не встраиваются намеренно: противоречие живёт между
+    # двумя разделами, и приписать его одному значит потерять вторую половину.
+    # Пустой список тоже проговаривается: у 147 компаний из 200 противоречий
+    # нет, и модель должна отвечать «не нашлось», а не молчать.
+    lines.append("")
+    показать = report.triggers if triggers is None else triggers
+    if показать:
+        lines.append("ПРОТИВОРЕЧИЯ В ДАННЫХ (найдены нами, не из признаков источника):")
+        for триггер in показать:
+            lines.append(f"— {триггер.title}. {триггер.explanation}")
+            for основание in триггер.evidence:
+                lines.append(f"    • {основание}")
+    else:
+        lines.append("ПРОТИВОРЕЧИЙ В ДАННЫХ не найдено.")
     return "\n".join(lines)
 
 
-def system_prompt(report: Report, chart_titles: list[str]) -> str:
+def system_prompt(report: Report, chart_titles: list[str], question: str = "") -> str:
     """Системная часть: правила плюс отчёт плюс доступные графики.
 
     Единственная сборка контекста на все каналы. Раньше их было две — эта для
@@ -264,7 +282,8 @@ def system_prompt(report: Report, chart_titles: list[str]) -> str:
     Список доступных графиков обязателен: у 22 компаний из 200 нет ни одного,
     и без списка модель предлагает то, чего построить нельзя.
     """
-    parts = [SYSTEM_PROMPT, f"\nОТЧЁТ О КОНТРАГЕНТЕ:\n{render_report(report)}"]
+    отчёт = render_report(report, order_for(report.triggers, question))
+    parts = [SYSTEM_PROMPT, f"\nОТЧЁТ О КОНТРАГЕНТЕ:\n{отчёт}"]
     if chart_titles:
         parts.append(
             "\nГрафики, которые можно показать по этой компании: "

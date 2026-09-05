@@ -16,6 +16,8 @@ from enum import Enum
 
 from core.charts import ChartSpec, build_charts
 from core.factors import frequency, heading, weight
+from core.triggers import Trigger
+from core.triggers import build as build_triggers
 
 # ─────────────────────────── разделы ───────────────────────────
 
@@ -182,6 +184,10 @@ class Report:
     unknown_chapters: tuple[str, ...] = ()
     signals: int = 0
     unknowns: int = 0
+    # Противоречия между блоками — то, чего не видно ни в одном разделе
+    # по отдельности. Считаются здесь же, чтобы модель и экран видели одно
+    # и то же: расхождение между ними проверить было бы нечем.
+    triggers: tuple[Trigger, ...] = ()
 
 
 # ─────────────────────────── оценки риска ───────────────────────────
@@ -486,4 +492,5 @@ def build(record: dict) -> Report:
         unknown_chapters=unknown,
         signals=sum(1 for s in sections if s.state is State.SIGNAL),
         unknowns=sum(1 for s in sections if s.state is State.EMPTY),
+        triggers=build_triggers(record),
     )

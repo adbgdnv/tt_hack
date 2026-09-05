@@ -130,6 +130,24 @@ export type RiskAssessment = {
   known: boolean;
 };
 
+/**
+ * Противоречие между разделами отчёта.
+ *
+ * Пути внутри данных сюда не приходят намеренно: ими триггер проверяется
+ * на сервере, а на экране пользователь видит слова.
+ */
+export type ReportTrigger = {
+  key: string;
+  title: string;
+  explanation: string;
+  /** Значения, из которых сложилось, уже отформатированные сервером. */
+  evidence: string[];
+  /** Раздел отчёта, где это можно проверить. */
+  section: string;
+  weight: number;
+  tags: string[];
+};
+
 export type CounterpartyReport = {
   inn: string;
   name: string;
@@ -144,6 +162,8 @@ export type CounterpartyReport = {
   unknown_chapters: string[];
   signals: number;
   unknowns: number;
+  /** Необязательно: сервер постарше о противоречиях не знает. */
+  triggers?: ReportTrigger[];
 };
 
 // ─────────── Описания графиков: приходят с сервера вместе с отчётом ───────────
