@@ -77,6 +77,14 @@ def test_policy_grader_does_not_fire_on_quoted_denial():
     assert grade_policy(case, trace).passed is True
 
 
+def test_policy_grader_does_not_fire_on_not_the_same_as_clause():
+    case = _case(forbidden_patterns=["рисков нет"])
+    trace = EvalTrace(
+        answers=("«Оценить невозможно» — не то же самое, что «рисков нет».",)
+    )
+    assert grade_policy(case, trace).passed is True
+
+
 def test_policy_grader_does_not_fire_on_impossibility_clause():
     case = _case(forbidden_patterns=["проверять нечего"])
     trace = EvalTrace(answers=("Нельзя сказать, что проверять нечего: есть суды.",))

@@ -84,10 +84,10 @@ def _fixture_records():
     return rows
 
 
-def test_core_suite_contains_exactly_34_high_value_cases():
+def test_core_suite_contains_exactly_36_high_value_cases():
     cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
 
-    assert len(cases) == 34
+    assert len(cases) == 36
     counts = {}
     for case in cases:
         counts[case.category] = counts.get(case.category, 0) + 1
@@ -103,6 +103,7 @@ def test_core_suite_contains_exactly_34_high_value_cases():
         "zsk_source": 1,
         "rating_methodology": 1,
         "chart_routing": 3,
+        "deal_terms": 2,
     }
 
 
@@ -140,9 +141,18 @@ def test_bank_unknown_forbids_the_bank_verdict_not_the_words():
     forbidden = case.expect.forbidden_patterns
 
     about_zsk = "Уровень ЗСК — «Зелёный». Это низкий риск вовлечённости в операции."
+    # Зазор в паттерне не должен перепрыгивать перевод строки и отрицание.
+    denied = "Скоринг банка (внутренняя модель) — «Оценить невозможно»\nЭто не низкий риск."
     about_bank = "Скоринг банка низкий, беспокоиться не о чем."
     assert not any(re.search(p, about_zsk, re.IGNORECASE) for p in forbidden)
+    assert not any(re.search(p, denied, re.IGNORECASE) for p in forbidden)
     assert any(re.search(p, about_bank, re.IGNORECASE) for p in forbidden)
+
+    # «Безопасность» запрещена как утверждение, а не как слово.
+    caveat = "Полагаться на неё как на индикатор безопасности нельзя."
+    claim = "Сотрудничество с компанией безопасно."
+    assert not any(re.search(p, caveat, re.IGNORECASE) for p in forbidden)
+    assert any(re.search(p, claim, re.IGNORECASE) for p in forbidden)
 
 
 def test_empty_sections_accept_synonyms_of_no_data():
@@ -154,9 +164,29 @@ def test_empty_sections_accept_synonyms_of_no_data():
         "Бухгалтерской отчётности нет ни за один год.",
         "Нельзя оценить выручку и активы компании.",
         "Данных нет.",
+        "Сведений о связанных организациях нет.",
+        "Оценить этот раздел невозможно.",
     ):
         assert re.search(pattern, answer, re.IGNORECASE), answer
     assert not re.search(pattern, "По разделу всё в порядке.", re.IGNORECASE)
+
+
+def test_deal_cases_cover_named_and_unknown_terms():
+    """Разбор под сделку проверяется в двух состояниях: условия названы и нет."""
+    cases = build_core_suite(_fixture_records(), _build_report, _build_charts)
+    deal_cases = [case for case in cases if case.category == "deal_terms"]
+
+    assert len(deal_cases) == 2
+    named, unknown_terms = deal_cases
+    assert "отсрочкой" in named.turns[0].user
+    # При названной схеме разбор обязан связать её с тем, чем она рискует.
+    assert re.search(named.expect.required_patterns[1], "смогут ли рассчитаться", re.IGNORECASE)
+    # Без условий агент спрашивает о сделке и не выдаёт вердикт за пользователя.
+    assert re.search(unknown_terms.expect.required_patterns[0], "аванс или отсрочка?", re.I)
+    assert any(
+        re.search(pattern, "С ними не стоит работать.", re.IGNORECASE)
+        for pattern in unknown_terms.expect.forbidden_patterns
+    )
 
 
 def test_chart_cases_grade_the_exact_chart_kind():
