@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
+import { useEffect, useState } from 'react';
 import { Indicator } from '@alfalab/core-components-indicator';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
 
+import { searchCounterparties } from '../api';
 import { STATE_COLOR } from '../state';
-import type { CompareLevel, CompareVerdict } from '../types';
+import type { CompareLevel, CompareVerdict, Counterparty } from '../types';
 
 /** Цвет пула берётся из той же таблицы, что и точки разделов: три состояния
  *  одни и те же по всему продукту, и заводить им второй набор цветов значит
@@ -24,9 +24,13 @@ const ОТТЕНОК: Record<CompareLevel, string> = {
 /**
  * Пул контрагентов: кого сравниваем.
  *
- * Компании добавляются по ИНН — не по названию: в наборе есть однофамильцы,
- * и «ТЕХПРОМ» без уточнения выбирал бы за пользователя. Название показывается
- * после того, как компания найдена.
+ * Поиск тот же, что на главной: по ИНН, названию или ФИО руководителя,
+ * с подсказками. Раньше здесь принимался только ИНН — пользователь, знающий
+ * компанию по имени, вынужден был идти искать её на другом экране и возвращаться.
+ *
+ * Выбор идёт из подсказок, а не по введённой строке: в наборе есть
+ * однофамильцы — три разных ТЕХПРОМА с разными ИНН, — и добавлять «первого
+ * похожего» значило бы выбирать за пользователя.
  */
 export function ComparePool({
   pool,
@@ -46,12 +50,36 @@ export function ComparePool({
   const поИнн = new Map(verdicts.map((в) => [в.inn, в]));
   const пропавшие = new Set(notFound);
   const [ввод, setВвод] = useState('');
+  const [подсказки, setПодсказки] = useState<Counterparty[]>([]);
+  const [ищем, setИщем] = useState(false);
 
-  const добавить = () => {
-    const цифры = ввод.replace(/\D/g, '');
-    if (!цифры) return;
-    onAdd(цифры);
+  // Поиск с задержкой: без неё запрос уходит на каждую букву. Задержка та же,
+  // что на главной, — экраны не должны вести себя по-разному.
+  useEffect(() => {
+    const строка = ввод.trim();
+    if (строка.length < 3) {
+      setПодсказки([]);
+      setИщем(false);
+      return undefined;
+    }
+    let живо = true;
+    setИщем(true);
+    const таймер = window.setTimeout(() => {
+      void searchCounterparties(строка)
+        .then((найдено) => живо && setПодсказки(найдено))
+        .catch(() => живо && setПодсказки([]))
+        .finally(() => живо && setИщем(false));
+    }, 250);
+    return () => {
+      живо = false;
+      window.clearTimeout(таймер);
+    };
+  }, [ввод]);
+
+  const выбрать = (inn: string) => {
+    onAdd(inn);
     setВвод('');
+    setПодсказки([]);
   };
 
   return (
@@ -88,19 +116,41 @@ export function ComparePool({
         className="pool__add"
         onSubmit={(event) => {
           event.preventDefault();
-          добавить();
+          // Введён готовый ИНН — добавляем его; иначе ждём выбора из подсказок.
+          const цифры = ввод.replace(/\D/g, '');
+          if (цифры.length >= 10) выбрать(цифры);
         }}
       >
         <InputDesktop
           size={40}
+          block
+          clear="auto"
           value={ввод}
-          placeholder="ИНН контрагента"
-          aria-label="Добавить контрагента по ИНН"
+          placeholder="ИНН, название или ФИО руководителя"
+          aria-label="Добавить контрагента в пул"
           onChange={(_, { value }) => setВвод(value)}
         />
-        <ButtonDesktop size={40} view="secondary" type="submit" disabled={!ввод.trim()}>
-          Добавить
-        </ButtonDesktop>
+
+        {подсказки.length > 0 && !ищем && (
+          <div className="pool__hints suggestions" role="listbox" aria-label="Подсказки поиска">
+            {подсказки.map((компания) => (
+              <button
+                key={компания.inn}
+                type="button"
+                role="option"
+                onClick={() => выбрать(компания.inn)}
+              >
+                <span>
+                  <strong>{компания.name}</strong>
+                  {компания.director && <small>{компания.director}</small>}
+                </span>
+                <em>ИНН {компания.inn}</em>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {ищем && <div className="pool__hints inline-loader"><span />Ищем…</div>}
       </form>
     </section>
   );
