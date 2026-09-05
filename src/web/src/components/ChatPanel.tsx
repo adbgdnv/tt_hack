@@ -132,10 +132,15 @@ function AnswerFeedback({ value, onChange }: {
   );
 }
 
-export function ChatPanel({ report, onToast }: {
+export function ChatPanel({ report, expanded, onExpanded, onToast }: {
   report: CounterpartyReport | null;
+  /** Раскрыта ли полоса. Живёт в `App`: от неё зависит раскладка всей
+   *  страницы — навигация по разделам уходит вниз вместе с отчётом. */
+  expanded: boolean;
+  onExpanded: (open: boolean) => void;
   onToast: (message: string) => void;
 }) {
+  const setExpanded = onExpanded;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -147,11 +152,7 @@ export function ChatPanel({ report, onToast }: {
   /** Раскрытый вызов — один на всю ленту: развёрнутая страница и развёрнутый
    *  поиск разом выталкивают текст ответа с экрана. */
   const [openTool, setOpenTool] = useState<string | null>(null);
-  /** Раскрыт ли диалог на весь экран. Кейсодатель просил вынести агентскую часть
-   *  вперёд: «не стоит уделять внимание отрисовке текущих pdf в виде веб-аппки,
-   *  нужно сосредоточиться на сценарии агента». В колонке 408 пикселей вопрос
-   *  неудобно даже набрать. */
-  const [expanded, setExpanded] = useState(false);
+
   /** Внизу ли пользователь. Обновляется прокруткой, а не подсчётом при отрисовке. */
   const stickToBottom = useRef(true);
   const sessionId = useMemo(() => `s-${Math.random().toString(36).slice(2)}`, []);
@@ -166,7 +167,10 @@ export function ChatPanel({ report, onToast }: {
   // она превращается в дрожание.
   useEffect(() => {
     const element = scrollRef.current;
-    if (!element || !stickToBottom.current) return;
+    // Разговора ещё нет — прижимать нечего. Раньше лента открывалась
+    // прокрученной в конец первого сообщения, и вердикт, ради которого
+    // экран и открывается, оказывался выше края.
+    if (!element || !stickToBottom.current || messages.length === 0) return;
     element.scrollTop = element.scrollHeight;
   }, [messages, busy]);
 
@@ -178,22 +182,21 @@ export function ChatPanel({ report, onToast }: {
     setInput('');
     setAskedQuestions([]);
     setFeedback({});
-    setExpanded(false);
   }, [report?.inn]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // Esc сворачивает — привычка, а не выдумка: так закрывается любое наложение.
-  // Переписка при этом остаётся, к отчёту возвращаются, чтобы проверить
-  // утверждение, и возвращаются в тот же разговор.
+  // Esc сворачивает — привычка, а не выдумка. Во время ответа не сворачивает:
+  // текст, приходящий в невидимую полосу, для читателя потерян.
   useEffect(() => {
     if (!expanded) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setExpanded(false);
+      if (event.key === 'Escape' && !busy) setExpanded(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [expanded]);
+  }, [expanded, busy]);
+
 
   const ask = async (question: string) => {
     const clean = question.trim();
@@ -322,38 +325,25 @@ export function ChatPanel({ report, onToast }: {
   };
 
   return (
-    <>
-      {/* Подложка гасит отчёт, но оставляет его видимым: к нему возвращаются,
-          чтобы проверить утверждение, и он не должен исчезать совсем. */}
-      {expanded && (
-        <div
-          className="chat-backdrop"
-          aria-hidden="true"
-          onClick={() => setExpanded(false)}
-        />
-      )}
-      <aside
-        className={[
-          'chat-panel',
-          messages.length === 0 && !expanded ? 'chat-panel--empty' : '',
-          expanded ? 'chat-panel--expanded' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        aria-label="Чат об отчёте контрагента"
-      >
-      <header className="chat-header">
-        <div>
-          <span className="ai-mark">AI</span>
-          <div>
-            <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">
-              Чат по отчёту
-            </Typography.Title>
-            <small>Задайте вопрос своими словами</small>
-          </div>
+    <section
+      className={`chat-band${expanded ? ' chat-band--open' : ''}`}
+      aria-label="Разбор отчёта контрагента"
+    >
+      <header className="chat-band__head">
+        <span className="ai-mark">AI</span>
+        <div className="chat-band__title">
+          <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">
+            Разбор отчёта
+          </Typography.Title>
+          <small>Спросите что угодно об этой компании</small>
         </div>
         {expanded && (
-          <ButtonDesktop size={32} view="text" onClick={() => setExpanded(false)}>
+          <ButtonDesktop
+            size={32}
+            view="text"
+            disabled={busy}
+            onClick={() => setExpanded(false)}
+          >
             Свернуть
           </ButtonDesktop>
         )}
@@ -361,6 +351,7 @@ export function ChatPanel({ report, onToast }: {
 
       <div
         className="chat-scroll"
+        hidden={!expanded}
         ref={scrollRef}
         onScroll={(event) => {
           const element = event.currentTarget;
@@ -415,11 +406,17 @@ export function ChatPanel({ report, onToast }: {
                   в разбираемую строку и ломал бы её. */}
               {message.streaming && <span className="agent-caret" aria-hidden="true" />}
 
+              {/* Разделы, названные в ответе, — сдержанной подписью, а не
+                  карточкой. Опознаются они совпадением слов в тексте, то есть
+                  догадкой (4 ответа из 8 на замере), и карточка выдавала бы
+                  догадку за проверенное основание. */}
               {message.sections.length > 0 && (
                 <div className="agent-message__grounding">
                   {message.sections.map((key) => {
                     const section = report?.sections.find((item) => item.key === key);
-                    return section ? <span className="static-label" key={key}>{section.title}</span> : null;
+                    return section ? (
+                      <span className="static-label" key={key}>{section.title}</span>
+                    ) : null;
                   })}
                 </div>
               )}
@@ -444,7 +441,13 @@ export function ChatPanel({ report, onToast }: {
         )}
       </div>
 
-      <div className="chat-suggestions" aria-label="Предложенные вопросы">
+      {/* Подсказки нужны, пока разговор не начался. Дальше они отнимают
+          у ленты треть высоты ровно там, где идёт ответ. */}
+      <div
+        className="chat-suggestions"
+        aria-label="Предложенные вопросы"
+        hidden={expanded && messages.length > 0}
+      >
         {messages.length === 0 && <span>С чего начать</span>}
         {questions.map((question) => (
           <ButtonDesktop
@@ -476,9 +479,15 @@ export function ChatPanel({ report, onToast }: {
           placeholder={report ? 'Напишите вопрос по отчёту' : 'Чат доступен с отчётом сервера'}
           aria-label="Вопрос по отчёту"
           onChange={(_, { value }) => setInput(value)}
-          // Раскрытие по постановке курсора, а не по отдельной кнопке: намерение
-          // задать вопрос выражается тем, что человек ставит курсор в поле.
-          onFocus={() => setExpanded(true)}
+          // Раздвижение по постановке курсора, а не по кнопке: намерение
+          // спросить выражается тем, что человек ставит курсор в поле.
+          onFocus={() => {
+            setExpanded(true);
+            // Браузер подкручивает страницу к полю, и шапка уезжает за край.
+            // Возвращаем верх: раскрытая полоса занимает экран целиком
+            // и должна начинаться под шапкой, а не над ней.
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         />
         <IconButtonDesktop
           size={48}
@@ -491,7 +500,6 @@ export function ChatPanel({ report, onToast }: {
           title="Отправить вопрос"
         />
       </form>
-      </aside>
-    </>
+    </section>
   );
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { ButtonDesktop } from '@alfalab/core-components-button/desktop';
 import { IconButtonDesktop } from '@alfalab/core-components-icon-button/desktop';
@@ -12,13 +13,7 @@ import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
 import { getCounterparty, getNews, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
 import type { CompanyNews, Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
 import { deriveVerdict } from './verdict';
-import { BlockModal } from './components/BlockModal';
 import { Brand } from './components/Brand';
-import { CompletionBar } from './components/CompletionBar';
-import { NewsBlock } from './components/NewsBlock';
-import { SourceLights } from './components/SourceLights';
-import { TriggersBlock } from './components/TriggersBlock';
-import { VerdictBanner } from './components/VerdictBanner';
 // Отложенно: чат нужен только на экране компании, а тянет за собой разбор
 // разметки — 51 КБ в сжатии. На первом экране это чистый простой.
 // Ожидание срабатывает один раз при открытии компании, а не на каждое слово
@@ -26,7 +21,14 @@ import { VerdictBanner } from './components/VerdictBanner';
 const ChatPanel = lazy(() =>
   import('./components/ChatPanel').then((module) => ({ default: module.ChatPanel })),
 );
+import { BlockModal } from './components/BlockModal';
+import { SectionNav } from './components/SectionNav';
+import { CompletionBar } from './components/CompletionBar';
+import { NewsBlock } from './components/NewsBlock';
 import { ReportSection } from './components/ReportSection';
+import { SourceLights } from './components/SourceLights';
+import { TriggersBlock } from './components/TriggersBlock';
+import { VerdictBanner } from './components/VerdictBanner';
 
 const HISTORY_KEY = 'counterparty-check-history-v1';
 const reportSectionOrder = ['registration', 'finances', 'courts', 'enforcement', 'registries', 'activity', 'management', 'related'];
@@ -48,11 +50,16 @@ function writeHistory(history: HistoryItem[]) {
   }
 }
 
-function AppHeader({ compact, onHome }: { compact?: boolean; onHome?: () => void }) {
+function AppHeader({ compact, onHome, children }: {
+  compact?: boolean;
+  onHome?: () => void;
+  children?: ReactNode;
+}) {
   return (
     <header className={'app-header' + (compact ? ' app-header--compact' : '')}>
       <Brand onHome={onHome} />
       <span className="app-header__product">Проверка контрагента</span>
+      {children}
     </header>
   );
 }
@@ -210,12 +217,17 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
   // модель в сокращённом ответе API, приведённые к тому же контракту — одна
   // отрисовка вместо двух несогласованных.
   const sections = orderedSections(report?.sections ?? sectionsFromCompany(company));
-  const contactFacts = headerFacts(sections);
   const bankKnown = report ? report.bank_risk.known : company.bankRisk !== 'Нет данных';
   const bankValue = report?.bank_risk.value ?? company.bankRisk;
   const zskKnown = report ? report.zsk_risk.known : company.bankLight !== 'Нет данных';
   const zskValue = report?.zsk_risk.value ?? company.bankLight;
   const verdict = deriveVerdict(sections);
+  // Раскрыта ли полоса разбора. Живёт здесь, а не в чате: от неё зависит
+  // раскладка всей страницы — навигация по разделам уходит вниз вместе
+  // с отчётом, когда разговор занимает экран.
+  const [asking, setAsking] = useState(false);
+  // Экран новой компании открывается её отчётом, а не чужой перепиской.
+  useEffect(() => setAsking(false), [company.inn]);
 
   // Дата, на которую собраны данные. Спрашиваем у сервиса, а не подставляем
   // заглушку: раньше в карточке стояло «Данные отчёта на дата не указана».
@@ -230,109 +242,109 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
 
   return (
     <>
-      <AppHeader compact onHome={onHome} />
-      <main className="page dashboard-page">
-        <div className="dashboard-layout">
-          <section className="dashboard-main">
-            <ButtonDesktop
-              className="back-link"
+      <AppHeader compact onHome={onHome}>
+        {/* Имя и ИНН в шапке, а не отдельным блоком на пол-экрана: полоса
+            разбора занимает верх страницы, и «про какую компанию мы говорим»
+            должно оставаться видимым, когда отчёт уехал вниз. */}
+        <div className="company-chip">
+          <span className="company-chip__name">{company.name}</span>
+          <span>ИНН {company.inn}</span>
+          {dataDate && <span>· данные на {dataDate}</span>}
+        </div>
+        <div className="app-header__actions">
+          <TooltipDesktop content="Сохранить в PDF" position="bottom">
+            <IconButtonDesktop
               size={40}
-              view="text"
-              leftAddons={<span aria-hidden="true">←</span>}
-              onClick={onHome}
-            >
-              Новый поиск
-            </ButtonDesktop>
-            <section className="company-header">
-              <div className="company-header__identity">
-                <div className="company-status-row">
-                  <span className="static-label">{company.status}</span>
-                  <span>ИНН {company.inn}</span>
-                </div>
-                <Typography.Title tag="h1" view="medium" font="styrene" weight="bold">{company.name}</Typography.Title>
-                {dataDate && <p>Данные на {dataDate}</p>}
-                {contactFacts.length > 0 && (
-                  <dl className="company-header__contacts">
-                    {contactFacts.map((fact) => (
-                      <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
-                    ))}
-                  </dl>
-                )}
-              </div>
-              <div className="report-actions">
-                {/* Печать средствами браузера: он же даёт и сохранение в файл.
-                    Генерация PDF на сервере — отдельная зависимость ради кнопки. */}
-                <TooltipDesktop content="Сохранить в PDF" position="top">
-                  <IconButtonDesktop size={40} view="secondary" icon={DocumentPdfMIcon} aria-label="Сохранить в PDF" onClick={() => window.print()} />
-                </TooltipDesktop>
-                <TooltipDesktop content="Скопировать ссылку на отчёт" position="top">
-                  <IconButtonDesktop
-                    size={40}
-                    view="secondary"
-                    icon={ShareMIcon}
-                    aria-label="Скопировать ссылку на отчёт"
-                    onClick={() => {
-                      const url = `${window.location.origin}${window.location.pathname}?inn=${company.inn}`;
-                      navigator.clipboard
-                        .writeText(url)
-                        .then(() => onToast('Ссылка на отчёт скопирована'))
-                        .catch(() => onToast('Не удалось скопировать — скопируйте адрес из строки браузера'));
-                    }}
-                  />
-                </TooltipDesktop>
-              </div>
-            </section>
+              view="secondary"
+              icon={DocumentPdfMIcon}
+              aria-label="Сохранить в PDF"
+              onClick={() => window.print()}
+            />
+          </TooltipDesktop>
+          <TooltipDesktop content="Скопировать ссылку на отчёт" position="bottom">
+            <IconButtonDesktop
+              size={40}
+              view="secondary"
+              icon={ShareMIcon}
+              aria-label="Скопировать ссылку на отчёт"
+              onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}?inn=${company.inn}`;
+                navigator.clipboard
+                  .writeText(url)
+                  .then(() => onToast('Ссылка на отчёт скопирована'))
+                  .catch(() => onToast('Не удалось скопировать — скопируйте адрес из строки браузера'));
+              }}
+            />
+          </TooltipDesktop>
+          <ButtonDesktop size={40} view="text" onClick={onHome}>
+            Новый поиск
+          </ButtonDesktop>
+        </div>
+      </AppHeader>
 
-            <div className="dashboard-content">
-              {openedSection ? (
-                <BlockModal
-                  sections={sections}
-                  blockKey={openedSection}
-                  highlighted={highlighted}
-                  onClose={onCloseBlock}
-                  onOpenBlock={onOpenBlock}
-                />
-              ) : (
-                <>
-                  <SourceLights
-                    bank={{ known: bankKnown, value: bankValue }}
-                    zsk={{ known: zskKnown, value: zskValue }}
-                  />
-                  <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />
-
-                  {/* Противоречия сразу под вердиктом: это то, ради чего
-                      пользователь пришёл, и читать до них восемь карточек
-                      он не должен. Блока нет только у старого сервера,
-                      который о них не знает. */}
-                  {report && (
-                    <TriggersBlock triggers={report.triggers ?? []} onOpenSection={onOpenBlock} />
-                  )}
-
-                  <div className="blocks-heading">
-                    <div>
-                      <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">Разделы проверки</Typography.Title>
-                    </div>
-                    <TooltipDesktop content="Порядок разделов постоянный. Недостаток данных не означает отсутствие рисков">
-                      <span className="indicator-legend">Как читать разделы</span>
-                    </TooltipDesktop>
-                  </div>
-
-                  <div className="report-sections">
-                    {sections.map((section) => (
-                      <ReportSection key={section.key} section={section} onOpen={() => onOpenBlock(section.key)} />
-                    ))}
-                  </div>
-
-                  <NewsBlock news={news} />
-
-                  <CompletionBar onAnswer={() => onToast('Спасибо за отзыв')} />
-                </>
-              )}
-            </div>
-          </section>
-          <Suspense fallback={<aside className="chat-panel" aria-hidden="true" />}>
-            <ChatPanel report={report} onToast={onToast} />
+      {/* Сверху — разговор и навигация по разделам, под ними отчёт. Раскрытие
+          полосы двигает всё вниз само, потоком документа: считать высоты
+          и раздавать отступы не нужно, а значит нечему и разъезжаться. */}
+      <main className="page dashboard-page">
+        <div className={`dash-top${asking ? ' dash-top--asking' : ''}`}>
+          <Suspense fallback={<div className="chat-band chat-band--loading">Загрузка разбора…</div>}>
+            <ChatPanel
+              report={report}
+              expanded={asking}
+              onExpanded={setAsking}
+              onToast={onToast}
+            />
           </Suspense>
+          <SectionNav sections={sections} onOpen={onOpenBlock} />
+        </div>
+
+        <div className="dashboard-content">
+          {openedSection ? (
+            <BlockModal
+              sections={sections}
+              blockKey={openedSection}
+              highlighted={highlighted}
+              onClose={onCloseBlock}
+              onOpenBlock={onOpenBlock}
+            />
+          ) : (
+            <>
+              <SourceLights
+                bank={{ known: bankKnown, value: bankValue }}
+                zsk={{ known: zskKnown, value: zskValue }}
+              />
+              <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />
+
+              {/* Противоречия сразу под вердиктом: это то, ради чего
+                  пользователь пришёл, и читать до них восемь карточек
+                  он не должен. */}
+              {report && (
+                <TriggersBlock triggers={report.triggers ?? []} onOpenSection={onOpenBlock} />
+              )}
+
+              <div className="blocks-heading">
+                <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">
+                  Разделы проверки
+                </Typography.Title>
+                <TooltipDesktop content="Порядок разделов постоянный. Недостаток данных не означает отсутствие рисков">
+                  <span className="indicator-legend">Как читать разделы</span>
+                </TooltipDesktop>
+              </div>
+
+              <div className="report-sections">
+                {sections.map((section) => (
+                  <ReportSection
+                    key={section.key}
+                    section={section}
+                    onOpen={() => onOpenBlock(section.key)}
+                  />
+                ))}
+              </div>
+
+              <NewsBlock news={news} />
+              <CompletionBar onAnswer={() => onToast('Спасибо за отзыв')} />
+            </>
+          )}
         </div>
       </main>
     </>

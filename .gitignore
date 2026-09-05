@@ -30,3 +30,7 @@ evals/datasets/*
 !evals/datasets/.gitkeep
 evals/results/*
 !evals/results/.gitkeep
+
+# Рабочие файлы макетов дизайн-холста: генераторы и собранная страница.
+# В продукт не входят, а собранная страница весит два мегабайта.
+.design/

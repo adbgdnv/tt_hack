@@ -1,6 +1,7 @@
 import { Link } from '@alfalab/core-components-link';
 import { Skeleton } from '@alfalab/core-components-skeleton';
-import { Status } from '@alfalab/core-components-status';
+import { Indicator } from '@alfalab/core-components-indicator';
+import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { Typography } from '@alfalab/core-components-typography';
 
 import type { CompanyNews } from '../types';
@@ -40,10 +41,17 @@ export function NewsBlock({ news }: { news: CompanyNews | null | undefined }) {
             Найдено в открытых источниках и отчётом не подтверждено. Проверяйте по ссылке.
           </p>
         </div>
+        {/* Уровень — точкой, как у разделов: одна форма индикатора на весь
+            продукт, иначе новости читаются как сообщение другого рода. */}
         {news && !news.failed && news.level && (
-          <Status size={20} view="soft" color={news.level === 'тревожная' ? 'red' : 'green'}>
-            {LEVEL_LABEL[news.level]}
-          </Status>
+          <TooltipDesktop content={LEVEL_LABEL[news.level]} position="top">
+            <span className="state-dot" role="img" aria-label={LEVEL_LABEL[news.level]}>
+              <Indicator
+                size={8}
+                backgroundColor={news.level === 'тревожная' ? '#ec2d20' : '#0d9336'}
+              />
+            </span>
+          </TooltipDesktop>
         )}
       </header>
 

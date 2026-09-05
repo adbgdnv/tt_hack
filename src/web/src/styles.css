@@ -162,7 +162,6 @@ input:focus-visible,
 
 .card,
 .company-header,
-.chat-panel,
 .history-card,
 .source-lights {
   background: var(--surface);
@@ -659,6 +658,23 @@ input:focus-visible,
   column-gap: 14px;
 }
 
+/* Точка состояния. Одна форма на карточку раздела, строку разделов, ленту
+   и новости — иначе каждое место показа заводит свой вид индикатора.
+   Обёртка нужна подсказке: она вешается на элемент, а не на компонент. */
+.state-dot {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  cursor: default;
+}
+
+/* Состояние словами — только в подробном виде. На карточке его говорит точка. */
+.report-section__state {
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
 .report-section {
   /* Карточка не разрывается между колонками — половина фактов в одной колонке,
      половина в другой читалась бы как две разные карточки. */
@@ -1110,57 +1126,183 @@ button.report-section:hover {
 
 /* ─────────────────────────────── Диалог ───────────────────────────────── */
 
-.chat-panel {
-  position: sticky;
-  top: 20px;
-  height: calc(100vh - 40px);
-  min-height: 640px;
+/* ─────────────────────── Верх экрана компании ─────────────────────── */
+
+/* Разговор слева, навигация по разделам справа. Раскрытие полосы схлопывает
+   сетку в одну колонку: навигация уходит под разговор и вместе с отчётом
+   оказывается ниже края экрана — «двигает всё вниз» делает поток документа,
+   а не расчёт высот. */
+.dash-top {
+  margin-top: 20px;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: 20px;
+  align-items: start;
+}
+
+.dash-top--asking {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ─────────────────────── Навигация по разделам ─────────────────────── */
+
+.section-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-16);
+}
+
+.section-nav__head {
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.section-nav__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--border-radius-8);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.section-nav__item:hover {
+  background: var(--inset);
+  color: var(--ink);
+}
+
+.section-nav__item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-nav__summary {
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
+/* Раскрытый разговор уводит навигацию вниз — там она уже не колонка,
+   а строка: тянуть узкий столбец во всю ширину незачем. */
+.dash-top--asking .section-nav__items {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dash-top--asking .section-nav__item {
+  width: auto;
+  padding: 0 10px;
+}
+
+/* ─────────────────────── Полоса разбора ─────────────────────── */
+
+/* Стоит над отчётом обычным блоком: растёт — отчёт уезжает вниз сам, потоком
+   документа. Фиксированная полоса с отступом у отчёта требовала бы
+   согласовывать два числа в двух местах.
+
+   Свёрнутая высота не задаётся числом: её задаёт содержимое — шапка,
+   подсказки и поле. Число разъехалось бы с ними при первой же правке. */
+.chat-band {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-16);
   overflow: hidden;
 }
 
-/* Пока разговора нет, панель занимает столько, сколько занимает. Растянутая
-   на весь экран пустая лента отрывала приветствие от подсказок третью экрана
-   пустоты и читалась как сломанный чат, а не как приглашение задать вопрос. */
-.chat-panel--empty {
-  height: auto;
-  min-height: 0;
-  grid-template-rows: auto auto auto auto;
+.chat-band--open {
+  height: calc(100vh - 104px);
 }
 
-.chat-panel--empty .chat-scroll {
-  padding-bottom: 4px;
-}
-
-/* Диалог во весь экран. Кейсодатель просил вынести агентскую часть вперёд:
-   «нужно сосредоточиться на сценарии агента». В колонке 408 пикселей вопрос
-   неудобно даже набрать, а ответ с графиком внутри вызова не помещается вовсе.
-
-   Отчёт при этом не разгружается и не перерисовывается — он остаётся под
-   подложкой ровно там, где был, и возврат по Esc не стоит ни одного запроса. */
-.chat-panel--expanded {
-  position: fixed;
-  inset: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(1080px, calc(100vw - 32px));
-  height: auto;
-  min-height: 0;
-  z-index: 41;
-  box-shadow: 0 24px 64px rgb(0 0 0 / 22%);
-}
-
-.chat-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  /* Гасим отчёт, но не прячем: к нему возвращаются проверять утверждения. */
-  background: rgb(15 20 30 / 34%);
+.chat-band--loading {
+  padding: 22px;
+  color: var(--ink-tertiary);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .chat-panel--expanded { transition: box-shadow 0.15s ease; }
+  .chat-band { transition: height 0.18s ease; }
+}
+
+.chat-band__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-band__title {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.chat-band__title small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
+.chat-band__head > .app-header__actions,
+.chat-band__head > button {
+  flex: none;
+}
+
+/* Свёрнутая полоса — это поле вопроса и подсказки, и ничего больше. Столбиком
+   подсказки занимали 300 пикселей и отодвигали отчёт вниз ещё до того, как
+   пользователь о чём-то спросил. Строкой — 40. */
+.chat-band:not(.chat-band--open) .chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 18px 0;
+}
+
+.chat-band:not(.chat-band--open) .chat-suggestions__item {
+  width: auto;
+  min-height: 36px;
+  height: auto;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.chat-band:not(.chat-band--open) .chat-suggestions > span {
+  display: none;
+}
+
+.chat-band .chat-form {
+  padding: 14px 18px 16px;
+}
+
+/* Лента по центру: строка во весь экран не читается, колонкой — читается. */
+.chat-scroll > *,
+.chat-suggestions,
+.chat-form {
+  width: min(820px, 100%);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .chat-header {
@@ -1557,5 +1699,40 @@ button.report-section:hover {
 
 .report-chart--compact .report-chart__values {
   font-size: 11px;
+}
+
+
+/* ─────────────────────── Шапка экрана компании ─────────────────────── */
+
+/* Имя и ИНН в шапке, а не отдельным блоком на пол-экрана: разговор занимает
+   страницу, и «про какую компанию мы говорим» должно быть видно всегда. */
+.company-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-strong);
+  min-width: 0;
+  color: var(--ink-tertiary);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.company-chip__name {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.app-header__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
 }
 

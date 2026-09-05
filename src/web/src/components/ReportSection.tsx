@@ -2,32 +2,14 @@ import { Amount } from '@alfalab/core-components-amount';
 import { Divider } from '@alfalab/core-components-divider';
 import { Indicator } from '@alfalab/core-components-indicator';
 import { List } from '@alfalab/core-components-list';
-import { Status } from '@alfalab/core-components-status';
+import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { Typography } from '@alfalab/core-components-typography';
 
 import { ReportChart } from './ReportChart';
+import { STATE_COLOR, STATE_LABEL } from '../state';
 import type { ReportFact, ReportSectionData, SectionState } from '../types';
 
-const STATE_COLOR: Record<SectionState, 'red' | 'green' | 'grey'> = {
-  signal: 'red',
-  filled: 'green',
-  empty: 'grey',
-  not_applicable: 'grey',
-};
-
-const DOT_COLOR: Record<SectionState, string> = {
-  signal: '#ec2d20',
-  filled: '#0d9336',
-  empty: '#9a9da4',
-  not_applicable: '#9a9da4',
-};
-
-export const STATE_LABEL: Record<SectionState, string> = {
-  signal: 'Есть на что обратить внимание',
-  filled: 'Значимых сигналов нет',
-  empty: 'Недостаточно данных',
-  not_applicable: 'Не применимо',
-};
+export { STATE_LABEL };
 
 /**
  * Сколько проверок раздела компания прошла.
@@ -204,15 +186,26 @@ export function ReportSection({ section, onOpen, mode = 'preview' }: {
 
   const content = (
     <>
+      {/* Состояние — точкой, а не плашкой с текстом. Плашка повторяла то, что
+          уже сказано точкой, занимала треть ширины заголовка и стояла на всех
+          восьми карточках сразу: восемь одинаковых по форме сообщений
+          перестают читаться на третьем. Слова остаются в подсказке и для
+          экранного диктора — цвет сам по себе не сообщение. */}
       <header className="report-section__head">
         <div className="report-section__title">
-          <Indicator size={8} backgroundColor={DOT_COLOR[section.state]} />
+          <TooltipDesktop content={STATE_LABEL[section.state]} position="top">
+            <span className="state-dot" role="img" aria-label={STATE_LABEL[section.state]}>
+              <Indicator size={8} backgroundColor={STATE_COLOR[section.state]} />
+            </span>
+          </TooltipDesktop>
           <Typography.Title tag="h3" view="xsmall" font="styrene" weight="bold">{section.title}</Typography.Title>
         </div>
-        <Status size={20} view="soft" color={STATE_COLOR[section.state]}>
-          {STATE_LABEL[section.state]}
-        </Status>
       </header>
+      {/* В подробном виде состояние названо словами: места достаточно,
+          и человек, пришедший разбираться, не должен угадывать цвет. */}
+      {!preview && (
+        <p className="report-section__state">{STATE_LABEL[section.state]}</p>
+      )}
       {!preview && SECTION_DESCRIPTION[section.key] && (
         <p className="report-section__description">{SECTION_DESCRIPTION[section.key]}</p>
       )}
