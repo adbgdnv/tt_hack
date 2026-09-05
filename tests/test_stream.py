@@ -357,8 +357,15 @@ async def test_событие_deal_несёт_разобранные_услов�
     assert события[0].data["sum"] == 3_000_000
 
 
-def test_условия_из_запроса_доезжают_до_цикла(monkeypatch):
-    """Форма над полем ввода — второй источник условий, наравне с репликой."""
+@pytest.fixture
+def перехваченные_условия(monkeypatch):
+    """Клиент ручки и то, с какими условиями сделки её вызвали.
+
+    Набор здесь не нужен — запись подменена, — но приложение читает его при
+    старте и без подмены не поднимается. `@нужен_набор` соседних тестов
+    выключил бы проверку ровно там, где она нужна: в CI набора нет никогда.
+    """
+    monkeypatch.setattr("api.main.repo.load", lambda *_, **__: None)
     monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
     переданное = {}
 
@@ -371,42 +378,36 @@ def test_условия_из_запроса_доезжают_до_цикла(mon
         return пусто()
 
     monkeypatch.setattr(loop, "run_stream", подстава)
-
     with TestClient(app) as client:
-        client.post(
-            "/chat/stream",
-            json={
-                "message": "вопрос",
-                "inn": ОПОРНАЯ,
-                "session_id": "т",
-                "deal": {"side": "supplier", "scheme": "prepay", "sum": 3000000, "days": 45},
-            },
-        )
+        yield client, переданное
+
+
+def test_условия_из_запроса_доезжают_до_цикла(перехваченные_условия):
+    """Форма над полем ввода — второй источник условий, наравне с репликой."""
+    client, переданное = перехваченные_условия
+
+    client.post(
+        "/chat/stream",
+        json={
+            "message": "вопрос",
+            "inn": ОПОРНАЯ,
+            "session_id": "т",
+            "deal": {"side": "supplier", "scheme": "prepay", "sum": 3000000, "days": 45},
+        },
+    )
 
     assert переданное["сделка"].side == "supplier"
     assert переданное["сделка"].scheme == "prepay"
 
 
-def test_чужой_ключ_условий_отбрасывается(monkeypatch):
+def test_чужой_ключ_условий_отбрасывается(перехваченные_условия):
     """Значение не из словаря — ошибка клиента, а не сведение о сделке:
     в промпт оно уходить не должно."""
-    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
-    переданное = {}
+    client, переданное = перехваченные_условия
 
-    def подстава(состояние, отчёт, запись, вопрос, инструменты=None, сделка=None):
-        переданное["сделка"] = сделка
-
-        async def пусто():
-            yield events.Event("done", {"sections": []})
-
-        return пусто()
-
-    monkeypatch.setattr(loop, "run_stream", подстава)
-
-    with TestClient(app) as client:
-        client.post(
-            "/chat/stream",
-            json={"message": "вопрос", "inn": ОПОРНАЯ, "deal": {"side": "кто-то ещё"}},
-        )
+    client.post(
+        "/chat/stream",
+        json={"message": "вопрос", "inn": ОПОРНАЯ, "deal": {"side": "кто-то ещё"}},
+    )
 
     assert переданное["сделка"].side is None
