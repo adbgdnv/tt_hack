@@ -459,3 +459,59 @@ def test_смена_контрагента_сбрасывает_разговор
 
     assert сессия.history == []
     assert сессия.deal.scheme == "prepay"
+
+def test_в_промпте_есть_сегодняшняя_дата(monkeypatch):
+    """Без даты модель считает «сегодня» по своей отсечке обучения и путается
+    в сроках: «последняя отчётность за 2023 год» — это два года назад или
+    полгода? Отчёт про давность говорит, а модель, отвечая своими словами,
+    легко скажет иначе.
+    """
+    from datetime import datetime
+
+    from api.agent import prompt as prompt_module
+
+    monkeypatch.setattr(
+        prompt_module, "_now", lambda: datetime(2026, 9, 7, 9, 30, tzinfo=prompt_module.МОСКВА)
+    )
+
+    блок = prompt_module.today_block()
+
+    assert "понедельник, 7 сентября 2026 года, 09:30 по Москве" in блок
+    assert блок.startswith("<TODAY>")
+
+
+def test_дата_набора_отделена_от_сегодняшней(monkeypatch):
+    """Между «сегодня» и «данные собраны» лежит всё, чего продукт знать
+    не может. Не сказав второго, он выдаёт первое за срез действительности."""
+    from api.agent import prompt as prompt_module
+
+    monkeypatch.setattr(
+        prompt_module, "_дата_набора", lambda: "3 сентября 2026 года"
+    )
+
+    блок = prompt_module.today_block()
+
+    assert "собраны 3 сентября 2026 года" in блок
+    assert "знать об этом ты не можешь" in блок
+
+
+def test_без_набора_блок_даты_не_падает(monkeypatch):
+    """Набор в репозиторий не коммитится: в CI его нет, и промпт обязан
+    собираться без него."""
+    from api.agent import prompt as prompt_module
+
+    monkeypatch.setattr(prompt_module, "_дата_набора", lambda: "")
+
+    блок = prompt_module.today_block()
+
+    assert "Сегодня" in блок
+    assert "собраны" not in блок
+
+
+def test_дата_попадает_в_системный_промпт():
+    from api.agent.prompt import system_prompt
+
+    собран = system_prompt(build(запись()), [], "вопрос")
+
+    assert "<TODAY>" in собран
+    assert "Сегодня" in собран
