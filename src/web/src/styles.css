@@ -1270,8 +1270,9 @@ button.report-section:hover {
   font-size: 12px;
 }
 
-.chat-band__head > .app-header__actions,
-.chat-band__head > button {
+/* Переключатель в правом верхнем углу. Обёртка подсказки — тоже элемент,
+   и без этого она растягивается вместе с заголовком. */
+.chat-band__head > *:last-child {
   flex: none;
 }
 

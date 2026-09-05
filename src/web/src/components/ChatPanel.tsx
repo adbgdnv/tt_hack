@@ -4,7 +4,10 @@ import { IconButtonDesktop } from '@alfalab/core-components-icon-button/desktop'
 import { TagDesktop } from '@alfalab/core-components-tag/desktop';
 import { Typography } from '@alfalab/core-components-typography';
 import { InputDesktop } from '@alfalab/core-components-input/desktop';
+import { ArrowsInwardMIcon } from '@alfalab/icons-glyph/ArrowsInwardMIcon';
+import { ArrowsOutwardMIcon } from '@alfalab/icons-glyph/ArrowsOutwardMIcon';
 import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
+import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 
 import { streamChat } from '../api';
 import type { AnswerCheck, CounterpartyReport, MessageBlock } from '../types';
@@ -348,16 +351,27 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           </Typography.Title>
           <small>Спросите что угодно об этой компании</small>
         </div>
-        {expanded && (
-          <ButtonDesktop
+        {/* Переключатель в углу, а не кнопка «Свернуть» при раскрытом.
+            Раскрытие есть и по фокусу в поле, но фокус — намерение спросить,
+            а не намерение читать: перечитать длинный ответ хочется и без
+            нового вопроса, и для этого нужна явная кнопка.
+
+            Свернуть во время ответа нельзя: текст, приходящий в невидимую
+            панель, для читателя потерян. */}
+        <TooltipDesktop
+          content={expanded ? 'Свернуть' : 'Развернуть на весь экран'}
+          position="left"
+        >
+          <IconButtonDesktop
             size={32}
-            view="text"
-            disabled={busy}
-            onClick={() => setExpanded(false)}
-          >
-            Свернуть
-          </ButtonDesktop>
-        )}
+            view="secondary"
+            icon={expanded ? ArrowsInwardMIcon : ArrowsOutwardMIcon}
+            disabled={expanded && busy}
+            aria-label={expanded ? 'Свернуть разбор' : 'Развернуть разбор на весь экран'}
+            aria-expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
+          />
+        </TooltipDesktop>
       </header>
 
       <div
