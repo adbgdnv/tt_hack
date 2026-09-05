@@ -434,16 +434,24 @@ def intent_of(question: str) -> Intent:
     return GENERAL
 
 
-def order_for(triggers: tuple[Trigger, ...], question: str) -> tuple[Trigger, ...]:
+def order_for(
+    triggers: tuple[Trigger, ...], question: str, tags: tuple[str, ...] = ()
+) -> tuple[Trigger, ...]:
     """Тот же состав, другой порядок: совпавшие по тегам поднимаются наверх.
 
     Внутри каждой группы порядок прежний — по значимости, затем по ключу,
     чтобы одинаковые вопросы давали одинаковый ответ.
+
+    `tags` — теги сохранённых условий сделки (`core.deal.tags`). Намерение
+    читается из текущей реплики и живёт ровно один вопрос; условия сделки
+    названы один раз и действуют весь разговор, поэтому складываются, а не
+    заменяют друг друга: вопрос «а суды?» при отсрочке должен остаться
+    вопросом человека, который даёт отсрочку.
     """
     намерение = intent_of(question)
-    if not намерение.tags:
+    нужные = set(намерение.tags) | set(tags)
+    if not нужные:
         return triggers
-    нужные = set(намерение.tags)
     return tuple(
         sorted(triggers, key=lambda t: (0 if нужные & set(t.tags) else 1, -t.weight, t.key))
     )

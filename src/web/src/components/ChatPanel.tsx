@@ -10,8 +10,10 @@ import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 
 import { streamChat } from '../api';
-import type { AnswerCheck, CounterpartyReport, MessageBlock } from '../types';
+import type { AnswerCheck, CounterpartyReport, Deal, MessageBlock } from '../types';
+import { dealKnown } from '../types';
 import { ChatMarkdown } from './ChatMarkdown';
+import { DealBar } from './DealBar';
 import { ToolBlock } from './ToolBlock';
 
 type Message =
@@ -43,12 +45,39 @@ const FEEDBACK_REASONS = [
   'Другое',
 ];
 
+/** Вопросы, которые имеют смысл только при названных условиях сделки.
+ *
+ *  Стоят первыми: пока человек не сказал, что за сделка, разбор идёт вообще,
+ *  а как только сказал — вопросы должны быть про его сделку, а не про разделы
+ *  отчёта. Пустая сделка не даёт ни одного — выдумывать за пользователя схему
+ *  расчётов нельзя. */
+function dealQuestions(deal: Deal): string[] {
+  const questions: string[] = [];
+  if (deal.scheme === 'prepay') {
+    questions.push('Что настораживает именно при авансе?', 'Чем обеспечен возврат аванса?');
+  }
+  if (deal.scheme === 'deferral') {
+    questions.push(
+      'Что говорит о способности рассчитаться по отсрочке?',
+      'Кто ещё взыскивает с них деньги?',
+    );
+  }
+  if (deal.scheme === 'spot') {
+    questions.push('Что мешает им поставить вовремя?');
+  }
+  if (deal.side === 'supplier') questions.push('Были ли у них сорванные поставки в судах?');
+  if (deal.side === 'buyer') questions.push('Платят ли они по своим обязательствам?');
+  if (dealKnown(deal)) questions.push('Чего не хватает, чтобы решить по этой сделке?');
+  return questions;
+}
+
 /** Пул шире видимых трёх вопросов: использованный вопрос сразу заменяется следующим. */
-function suggestionPool(report: CounterpartyReport | null): string[] {
+function suggestionPool(report: CounterpartyReport | null, deal: Deal): string[] {
   if (!report) return ['Что можно проверить в отчёте?'];
   const signalled = report.sections.filter((section) => section.state === 'signal');
   const missing = report.sections.filter((section) => section.state === 'empty');
   const questions = [
+    ...dealQuestions(deal),
     ...signalled.map((section) => `Какие факты важны в разделе «${section.title}»?`),
     ...missing.map((section) => `Каких данных не хватает в разделе «${section.title}»?`),
   ];
@@ -159,9 +188,16 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
   /** Внизу ли пользователь. Обновляется прокруткой, а не подсчётом при отрисовке. */
   const stickToBottom = useRef(true);
   const sessionId = useMemo(() => `s-${Math.random().toString(36).slice(2)}`, []);
+  /** Условия сделки. Живут дольше отчёта — при смене контрагента не сбрасываются:
+   *  это задача пользователя, а не свойство компании. Закупщик, который смотрит
+   *  трёх поставщиков под один аванс, описывал бы сделку заново на каждом. */
+  const [deal, setDeal] = useState<Deal>({});
   const questions = useMemo(
-    () => suggestionPool(report).filter((question) => !askedQuestions.includes(question)).slice(0, 3),
-    [askedQuestions, report],
+    () =>
+      suggestionPool(report, deal)
+        .filter((question) => !askedQuestions.includes(question))
+        .slice(0, 3),
+    [askedQuestions, report, deal],
   );
 
   // Держим ленту внизу, только пока пользователь и так внизу. Иначе отлистать
@@ -249,8 +285,13 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
     abortRef.current = controller;
     let failed = '';
     try {
-      for await (const event of streamChat(report.inn, clean, sessionId, controller.signal)) {
-        if (event.name === 'token') {
+      for await (const event of streamChat(report.inn, clean, sessionId, deal, controller.signal)) {
+        if (event.name === 'deal') {
+          // Условия, разобранные из самой реплики: «а если отсрочка 60 дней?»
+          // меняет сохранённый контекст так же, как переключатель в форме,
+          // иначе разговор и показанные условия расходятся.
+          setDeal(event.data);
+        } else if (event.name === 'token') {
           appendText(event.data.text);
         } else if (event.name === 'tool_start') {
           // Вызов открывается НА ТЕКУЩЕМ МЕСТЕ — отсюда и берётся порядок
@@ -392,7 +433,13 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
       >
         <div className="agent-message agent-message--summary">
           <span className="message-author">Ассистент</span>
-          <p>Отвечаю только по этому отчёту. Чего в нём нет — так и скажу.</p>
+          {/* Не «спросите что угодно», а «расскажите про сделку»: человек приходит
+              с задачей, и какие вопросы задавать по отчёту — наша работа, а не его.
+              Чего в данных нет — говорим прямо, это критерий приёмки. */}
+          <p>
+            Помогу решить, работать ли с этой компанией. Расскажите, что за сделка —
+            разберу отчёт под неё. Чего в данных нет, скажу прямо.
+          </p>
         </div>
 
         {messages.map((message) =>
@@ -478,6 +525,14 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           </div>
         )}
       </div>
+
+      {/* Условия сделки — над полем ввода, а не в ленте: они не реплика, а
+          состояние разговора, и остаются на экране, пока лента прокручивается. */}
+      <DealBar
+        deal={deal}
+        onChange={(patch) => setDeal((current) => ({ ...current, ...patch }))}
+        disabled={busy}
+      />
 
       {/* Подсказки нужны ровно до первого вопроса: они отвечают «с чего
           начать». Дальше человек уже начал, а они отнимают у ленты треть

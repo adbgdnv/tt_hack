@@ -22,6 +22,7 @@ from api.agent import tools as agent_tools
 from core import compare as compare_view
 from core import repo, slim
 from core import report as report_view
+from core.deal import SCHEMES, SIDES, Deal
 
 
 @asynccontextmanager
@@ -62,12 +63,42 @@ class CompareRequest(BaseModel):
     inns: list[str]
 
 
+class DealIn(BaseModel):
+    """Условия сделки, выставленные в интерфейсе.
+
+    Все поля необязательны: пустая форма — законное состояние, и заполнять её
+    целиком, чтобы задать вопрос, никто не обязан. Недостающее агент спрашивает
+    сам по ходу разговора, а разобранное из реплики возвращается событием `deal`.
+    """
+
+    side: str | None = None
+    scheme: str | None = None
+    sum: float | None = None
+    days: int | None = None
+    goal: str | None = None
+
+    def to_deal(self) -> Deal:
+        """В условие ядра, отбросив значения не из словарей.
+
+        Отбрасываем здесь, а не в ядре: чужой ключ роли — ошибка клиента,
+        а не сведение о сделке, и уходить в промпт он не должен.
+        """
+        return Deal(
+            side=self.side if self.side in SIDES else None,
+            scheme=self.scheme if self.scheme in SCHEMES else None,
+            sum=self.sum,
+            days=self.days,
+            goal=(self.goal or None),
+        )
+
+
 class ChatRequest(BaseModel):
-    """Вопрос о контрагенте в фокусе."""
+    """Вопрос о контрагенте в фокусе и условия сделки, под которую он задан."""
 
     message: str
     inn: str
     session_id: str = "default"
+    deal: DealIn | None = None
 
 
 def _serialize(report: report_view.Report) -> dict:
@@ -197,7 +228,12 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
     async def events():
         stream = loop.run_stream(
-            session, built, record, request.message, agent_tools.build(record, request.inn)
+            session,
+            built,
+            record,
+            request.message,
+            agent_tools.build(record, request.inn),
+            request.deal.to_deal() if request.deal else None,
         )
         # Разрыв соединения клиентом отменяет задачу и закрывает генератор:
         # недоеденный ответ продолжал бы тратить квоту, общую на всех.
@@ -243,6 +279,7 @@ async def chat(request: ChatRequest) -> dict:
             record,
             request.message,
             agent_tools.build(record, request.inn),
+            request.deal.to_deal() if request.deal else None,
         )
     except Exception as error:  # noqa: BLE001 — наружу уходит один понятный ответ
         raise HTTPException(
@@ -251,6 +288,9 @@ async def chat(request: ChatRequest) -> dict:
         ) from error
     return {
         "answer": answer.text,
+        # Условия сделки после этого хода: часть могла быть разобрана из самой
+        # реплики, и клиент должен показать пользователю, что у нас сохранилось.
+        "deal": asdict(answer.deal),
         "sections": list(answer.sections),
         "charts": list(answer.charts),
         "sources": list(answer.sources),

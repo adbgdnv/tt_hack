@@ -26,13 +26,15 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 
 from langchain_core.messages import AIMessage, ToolMessage
 
 from api.agent import events, graph, prompt
+from core import deal as deals
 from core import verify
 from core.charts import build_charts
+from core.deal import Deal
 from core.llm import PRIMARY, LLMClient, Route, chain, environment
 from core.report import Report
 
@@ -51,16 +53,33 @@ class Session:
     session_id: str
     history: list[dict] = field(default_factory=list)
     focus_inn: str | None = None  # о каком контрагенте сейчас речь
+    deal: Deal = field(default_factory=Deal)  # что за сделку человек проверяет
 
     def focus(self, inn: str) -> None:
         """Переключает контрагента, сбрасывая разговор.
 
         Ответы о предыдущей компании в новом контексте вводят в заблуждение:
         пользователь читает их как относящиеся к текущей.
+
+        Условия сделки при этом остаются: они про задачу пользователя, а не про
+        компанию. Закупщик, который смотрит трёх поставщиков под один аванс,
+        описывал бы их заново на каждой карточке.
         """
         if self.focus_inn != inn:
             self.history.clear()
             self.focus_inn = inn
+
+    def situation(self, question: str, stated: Deal | None = None) -> Deal:
+        """Условия сделки после этой реплики: форма, потом сама реплика.
+
+        Порядок именно такой. Форма — то, что человек выставил раньше, реплика —
+        то, что он говорит сейчас: «а если отсрочка?» должно переигрывать
+        выставленный аванс, иначе разговор и сохранённый контекст расходятся.
+        """
+        if stated is not None:
+            self.deal = deals.merge(self.deal, stated)
+        self.deal = deals.from_text(question, self.deal)
+        return self.deal
 
     def remember(self, question: str, answer: str) -> None:
         self.history.append({"role": "user", "content": question})
@@ -84,6 +103,10 @@ class Answer:
     sources: tuple[dict, ...] = ()
     lookups: tuple[dict, ...] = ()
     check: verify.Verification = field(default_factory=verify.Verification)
+    # Условия сделки, с которыми отвечали. Уходят клиенту, потому что часть
+    # из них разобрана из реплики: человек должен видеть, что именно у нас
+    # сохранилось, и мочь это поправить.
+    deal: Deal = field(default_factory=Deal)
 
 
 _SESSIONS: dict[str, Session] = {}
@@ -265,6 +288,7 @@ async def run(
     record: dict,
     question: str,
     tools: list | None = None,
+    deal: Deal | None = None,
 ) -> Answer:
     """Прогоняет шаг диалога и возвращает готовый ответ целиком.
 
@@ -277,8 +301,11 @@ async def run(
     доходить до него только тогда, когда не осталось ни одного.
     """
     state.focus(report.inn)
+    сделка = state.situation(question, deal)
     charts = {c.key: c for c in build_charts(record)}
-    системный = prompt.system_prompt(report, [c.title for c in charts.values()], question)
+    системный = prompt.system_prompt(
+        report, [c.title for c in charts.values()], question, сделка
+    )
 
     пути = _routes()
     последняя = None
@@ -317,6 +344,7 @@ async def run(
         sources=найденные,
         lookups=взятое,
         check=await _verified(report, text, путь, _shown(взятое, найденные)),
+        deal=сделка,
     )
 
 
@@ -326,6 +354,7 @@ async def run_stream(
     record: dict,
     question: str,
     tools: list | None = None,
+    deal: Deal | None = None,
 ) -> AsyncIterator[events.Event]:
     """Прогоняет шаг диалога, отдавая события по мере работы агента.
 
@@ -343,9 +372,14 @@ async def run_stream(
     у них общий, поэтому расходиться в возможностях им больше нечем.
     """
     state.focus(report.inn)
+    # Условия сделки — первым событием, до единого токена ответа. Часть из них
+    # разобрана из самой реплики, и человек должен видеть, что у нас сохранилось,
+    # раньше, чем прочтёт ответ, построенный на этом.
+    сделка = state.situation(question, deal)
+    yield events.Event("deal", asdict(сделка))
     charts = {c.key: c for c in build_charts(record)}
     titles = [c.title for c in charts.values()]
-    системный = prompt.system_prompt(report, titles, question)
+    системный = prompt.system_prompt(report, titles, question, сделка)
 
     пути = _routes()
     said: list[str] = []

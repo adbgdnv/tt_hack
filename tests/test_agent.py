@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from api.agent import loop
 from api.agent.prompt import SYSTEM_PROMPT, amount, render_report, system_prompt
+from core.deal import Deal
 from core.report import build
 
 
@@ -396,3 +397,65 @@ def test_промпт_не_путает_свои_данные_с_внешним�
     assert "не приписывай их открытым источникам" in низкий
     # И перед «данных нет» модель обязана заглянуть в тему
     assert "прежде чем сказать «данных нет», запроси тему" in низкий
+
+
+# ─────────────────────────── условия сделки ───────────────────────────
+
+
+async def test_условия_сделки_уходят_в_системную_часть(monkeypatch):
+    """Пользователь не обязан знать, какие вопросы задать: сделку он описывает
+    один раз, дальше её держит агент."""
+    записанное = []
+    monkeypatch.setattr(
+        loop.graph,
+        "build",
+        lambda tools, system, **_: записанное.append(system) or ПодставнойАгент(),
+    )
+
+    await loop.run(
+        loop.Session(session_id="a"),
+        build(запись()),
+        запись(),
+        "Стоит ли подписывать?",
+        [],
+        Deal(side="supplier", scheme="prepay", sum=3_000_000),
+    )
+
+    assert "поставщик" in записанное[0]
+    assert "3 000 000 ₽" in записанное[0]
+
+
+async def test_реплика_переигрывает_форму_и_остаётся_в_сессии(monkeypatch):
+    """«А если отсрочка?» меняет условия так же, как переключатель в форме.
+    Иначе разговор и сохранённый контекст расходятся, и человек получает ответ
+    про аванс на вопрос про отсрочку."""
+    записанное = []
+    monkeypatch.setattr(
+        loop.graph,
+        "build",
+        lambda tools, system, **_: записанное.append(system) or ПодставнойАгент(),
+    )
+    сессия = loop.Session(session_id="a")
+    отчёт, record = build(запись()), запись()
+
+    await loop.run(сессия, отчёт, record, "Вопрос", [], Deal(scheme="prepay"))
+    await loop.run(сессия, отчёт, record, "А если отсрочка 60 дней?", [])
+
+    assert сессия.deal.scheme == "deferral"
+    assert сессия.deal.days == 60
+    # Второй вопрос ушёл уже с новыми условиями, а не со старыми из формы
+    assert "отсрочка" in записанное[1]
+
+
+def test_смена_контрагента_сбрасывает_разговор_но_не_сделку():
+    """Условия — про задачу пользователя, а не про компанию. Закупщик, который
+    смотрит трёх поставщиков под один аванс, описывал бы их заново на каждом."""
+    сессия = loop.Session(session_id="a")
+    сессия.situation("аванс 3 млн поставщику")
+    сессия.focus("7704310756")
+    сессия.remember("вопрос", "ответ")
+
+    сессия.focus("5032257375")
+
+    assert сессия.history == []
+    assert сессия.deal.scheme == "prepay"

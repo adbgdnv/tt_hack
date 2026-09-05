@@ -6,6 +6,7 @@ import type {
   CompareResult,
   Counterparty,
   CounterpartyReport,
+  Deal,
   ReportBlock,
   ReportFactor,
   ReportSectionData,
@@ -343,6 +344,9 @@ export type ChatEvent =
   | { name: 'sources'; data: { items: { title: string; url: string; snippet: string }[] } }
   | { name: 'lookup'; data: { topic: string; text: string } }
   | { name: 'check'; data: AnswerCheck }
+  /** Условия сделки после этого хода: часть могла быть разобрана из реплики.
+   *  Приходит первым, до единого слова ответа. */
+  | { name: 'deal'; data: Deal }
   | { name: 'error'; data: { detail: string } }
   | { name: 'done'; data: { sections: string[] } };
 
@@ -360,13 +364,16 @@ export async function* streamChat(
   inn: string,
   message: string,
   sessionId: string,
+  /** Условия сделки из формы. Что названо в самой реплике, сервер разбирает
+   *  сам и присылает обратно событием `deal`. */
+  deal: Deal,
   signal?: AbortSignal,
 ): AsyncGenerator<ChatEvent> {
   if (!apiBase) throw new Error('Сервис разбора не настроен');
   const response = await fetch(`${apiBase}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ inn, message, session_id: sessionId }),
+    body: JSON.stringify({ inn, message, session_id: sessionId, deal }),
     signal,
   });
   if (!response.ok || !response.body) {

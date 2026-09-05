@@ -242,6 +242,48 @@ export type MessageBlock =
   | { kind: 'tool'; call: ToolCall };
 
 
+/**
+ * Условия сделки, под которую человек смотрит отчёт.
+ *
+ * Отчёт у всех один, а вопрос «работать или нет» — нет: при авансе решает
+ * способность поставить, при отсрочке — способность рассчитаться. Без условий
+ * собрать из разбора решение по своей сделке пользователь должен сам — ровно
+ * та работа, которую он и хотел переложить.
+ *
+ * Все поля необязательны: пустая форма — законное состояние, недостающее
+ * агент спрашивает по ходу разговора. Часть условий он разбирает из самой
+ * реплики и возвращает событием `deal` — поэтому это состояние приходит
+ * и с сервера, а не только уходит на него.
+ */
+export type DealSide = 'supplier' | 'buyer';
+export type DealScheme = 'prepay' | 'deferral' | 'spot';
+
+export type Deal = {
+  side?: DealSide | null;
+  scheme?: DealScheme | null;
+  sum?: number | null;
+  days?: number | null;
+  goal?: string | null;
+};
+
+export const DEAL_SIDES: { key: DealSide; label: string }[] = [
+  { key: 'supplier', label: 'Поставщика' },
+  { key: 'buyer', label: 'Покупателя' },
+];
+
+export const DEAL_SCHEMES: { key: DealScheme; label: string }[] = [
+  { key: 'prepay', label: 'Аванс' },
+  { key: 'deferral', label: 'Отсрочка' },
+  { key: 'spot', label: 'Оплата по факту' },
+];
+
+/** Названо ли хоть что-то. Пустая сделка — не «пользователь передумал»,
+ *  а «ещё не рассказал». */
+export function dealKnown(deal: Deal): boolean {
+  return Boolean(deal.side || deal.scheme || deal.sum || deal.days || deal.goal);
+}
+
+
 // ─────────── Новости из внешних источников ───────────
 // Отдельный слой, а не часть отчёта: кейсодатель задал иерархию источников
 // дословно — найденное снаружи всегда со ссылкой и всегда отдельно от фактов

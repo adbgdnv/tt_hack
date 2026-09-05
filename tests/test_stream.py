@@ -77,7 +77,8 @@ async def прогнать(monkeypatch, агент, сессия=None):
 async def test_текст_приходит_событиями(monkeypatch):
     события, _ = await прогнать(monkeypatch, ПодставнойАгент([кусок("54 актив"), кусок("ных")]))
 
-    assert [с.name for с in события] == ["token", "token", "check", "done"]
+    # `deal` первым: условия сделки уходят клиенту до первого слова ответа.
+    assert [с.name for с in события] == ["deal", "token", "token", "check", "done"]
 
 
 async def test_проверка_идёт_после_текста_а_не_до(monkeypatch):
@@ -120,8 +121,8 @@ async def test_отказ_модели_приходит_событием_а_не
 
     события, _ = await прогнать(monkeypatch, агент)
 
-    assert [с.name for с in события] == ["error", "done"]
-    assert "недоступен" in события[0].data["detail"]
+    assert [с.name for с in события] == ["deal", "error", "done"]
+    assert "недоступен" in события[1].data["detail"]
 
 
 async def test_отказ_первого_пути_переводит_на_запасной(monkeypatch):
@@ -202,7 +203,7 @@ async def test_пустой_ответ_это_ошибка_а_не_ответ(mo
     как поломка, а не как «мне нечего сказать»."""
     события, _ = await прогнать(monkeypatch, ПодставнойАгент([кусок("")]))
 
-    assert [с.name for с in события] == ["error", "done"]
+    assert [с.name for с in события] == ["deal", "error", "done"]
 
 
 async def test_ответ_запоминается_в_истории(monkeypatch):
@@ -238,6 +239,7 @@ async def test_вызов_инструмента_доходит_до_событ�
     события, _ = await прогнать(monkeypatch, ПодставнойАгент([вызов, итог, кусок("готово")]))
 
     assert [с.name for с in события] == [
+        "deal",
         "tool_start",
         "chart",
         "tool_end",
@@ -316,6 +318,9 @@ def test_обычная_ручка_отдаёт_добытое_инструме�
         # не отличит подтверждённое отчётом от неподтверждённого.
         "lookups": [],
         "check": {"total": 0, "unverified": [], "checked": False},
+        # Условия сделки после хода: часть могла быть разобрана из самой реплики,
+        # и клиент показывает пользователю, что у нас сохранилось.
+        "deal": {"side": None, "scheme": None, "sum": None, "days": None, "goal": None},
     }
 
 
@@ -333,3 +338,75 @@ def test_обычная_ручка_отвечает_502_на_сбой_прова
         ответ = client.post("/chat", json={"message": "вопрос", "inn": ОПОРНАЯ, "session_id": "т"})
 
     assert ответ.status_code == 502
+
+
+async def test_событие_deal_несёт_разобранные_условия(monkeypatch):
+    """Часть условий разбирается из самой реплики, и человек должен увидеть,
+    что у нас сохранилось, раньше, чем прочтёт построенный на этом ответ."""
+    monkeypatch.setattr(loop.graph, "build", lambda *_, **__: ПодставнойАгент([кусок("да")]))
+    сессия = loop.Session(session_id="т")
+
+    поток = loop.run_stream(
+        сессия, build(ЗАПИСЬ), ЗАПИСЬ, "готов дать отсрочку 60 дней на 3 млн", []
+    )
+    события = [с async for с in поток]
+
+    assert события[0].name == "deal"
+    assert события[0].data["scheme"] == "deferral"
+    assert события[0].data["days"] == 60
+    assert события[0].data["sum"] == 3_000_000
+
+
+def test_условия_из_запроса_доезжают_до_цикла(monkeypatch):
+    """Форма над полем ввода — второй источник условий, наравне с репликой."""
+    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
+    переданное = {}
+
+    def подстава(состояние, отчёт, запись, вопрос, инструменты=None, сделка=None):
+        переданное["сделка"] = сделка
+
+        async def пусто():
+            yield events.Event("done", {"sections": []})
+
+        return пусто()
+
+    monkeypatch.setattr(loop, "run_stream", подстава)
+
+    with TestClient(app) as client:
+        client.post(
+            "/chat/stream",
+            json={
+                "message": "вопрос",
+                "inn": ОПОРНАЯ,
+                "session_id": "т",
+                "deal": {"side": "supplier", "scheme": "prepay", "sum": 3000000, "days": 45},
+            },
+        )
+
+    assert переданное["сделка"].side == "supplier"
+    assert переданное["сделка"].scheme == "prepay"
+
+
+def test_чужой_ключ_условий_отбрасывается(monkeypatch):
+    """Значение не из словаря — ошибка клиента, а не сведение о сделке:
+    в промпт оно уходить не должно."""
+    monkeypatch.setattr("api.main.repo.by_inn", lambda inn: ЗАПИСЬ if inn == ОПОРНАЯ else None)
+    переданное = {}
+
+    def подстава(состояние, отчёт, запись, вопрос, инструменты=None, сделка=None):
+        переданное["сделка"] = сделка
+
+        async def пусто():
+            yield events.Event("done", {"sections": []})
+
+        return пусто()
+
+    monkeypatch.setattr(loop, "run_stream", подстава)
+
+    with TestClient(app) as client:
+        client.post(
+            "/chat/stream",
+            json={"message": "вопрос", "inn": ОПОРНАЯ, "deal": {"side": "кто-то ещё"}},
+        )
+
+    assert переданное["сделка"].side is None
