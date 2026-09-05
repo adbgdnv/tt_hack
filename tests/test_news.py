@@ -100,7 +100,7 @@ def test_оценка_новостей_идёт_мимо_основной_мод
 
     class Подставной:
         def __init__(self, provider="", **_):
-            заказано["провайдер"] = provider
+            заказано.setdefault("провайдеры", []).append(provider)
 
         def chat(self, max_tokens=0, **_):
             заказано["бюджет"] = max_tokens
@@ -110,7 +110,9 @@ def test_оценка_новостей_идёт_мимо_основной_мод
     with pytest.raises(RuntimeError):
         news._assess([{"title": "т", "snippet": "с"}], [""], "ООО «Т»")
 
-    assert заказано["провайдер"] == "groq"
+    # Первым спрашивается бесплатный: платить за разметку новости основной
+    # моделью не за что.
+    assert заказано["провайдеры"][0] == "groq"
     # Запас на ответ. Прежние 700 стояли под gpt-oss с `reasoning_effort="low"`;
     # на deepseek рассуждение съело 612 из них, ответ не распарсился, и блок
     # показал «внешний поиск не отвечает» — сбой связи вместо сбоя бюджета.
@@ -126,7 +128,7 @@ def test_без_ключа_запасного_провайдера_блок_не
 
     class Подставной:
         def __init__(self, provider="", **_):
-            заказано["провайдер"] = provider
+            заказано.setdefault("провайдеры", []).append(provider)
 
         def chat(self, **_):
             raise RuntimeError("дальше сети не идём")
@@ -135,4 +137,42 @@ def test_без_ключа_запасного_провайдера_блок_не
     with pytest.raises(RuntimeError):
         news._assess([{"title": "т", "snippet": "с"}], [""], "ООО «Т»")
 
-    assert заказано["провайдер"] == ""
+    assert заказано["провайдеры"] == [""]
+
+
+def test_исчерпанная_квота_бесплатного_не_убивает_блок(monkeypatch):
+    """Замерено на живом сервере: 197 462 из 200 000 токенов Groq в сутки,
+    и блок новостей отвечал «внешний поиск не отвечает» — то есть выдавал
+    исчерпанную квоту за сбой связи.
+
+    Дешёвый путь остаётся основным, но не единственным.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-тест")
+    спрошены = []
+
+    class Подставной:
+        def __init__(self, provider="", **_):
+            self.провайдер = provider
+            спрошены.append(provider)
+
+        def chat(self, **_):
+            if self.провайдер == "groq":
+                raise RuntimeError("429 rate_limit_exceeded")
+            return self
+
+        def with_structured_output(self, _схема):
+            return self
+
+        def invoke(self, _сообщения, config=None):
+            from api.news import _Assessment, _Judgement
+
+            return _Assessment(
+                judgements=[_Judgement(index=1, level="нейтральная", party=True, summary="ок")]
+            )
+
+    monkeypatch.setattr(news, "LLMClient", Подставной)
+
+    оценки = news._assess([{"title": "т", "snippet": "с"}], [""], "ООО «Т»")
+
+    assert спрошены == ["groq", ""]
+    assert len(оценки) == 1

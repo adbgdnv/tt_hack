@@ -181,20 +181,36 @@ def _assess(found: list[dict], pages: list[str], name: str) -> list[_Judgement]:
         содержимое = текст.strip() or находка["snippet"]
         блоки.append(f"Находка {номер}\nЗаголовок: {находка['title']}\nТекст: {содержимое}")
 
-    # Groq, если настроен; иначе то, на чём работает диалог — блок новостей
-    # не должен пропадать только потому, что запасной ключ не завели.
-    провайдер = ОЦЕНЩИК if key_for(ОЦЕНЩИК) else ""
-    модель = LLMClient(provider=провайдер).chat(max_tokens=ОТВЕТ_ТОКЕНОВ)
-    ответ = модель.with_structured_output(_Assessment).invoke(
-        [
-            {"role": "system", "content": SYSTEM.format(
-                alarming=ALARMING, neutral=NEUTRAL, irrelevant=IRRELEVANT
-            )},
-            {"role": "user", "content": f"Компания: {name}\n\n" + "\n\n".join(блоки)},
-        ],
-        config={"run_name": "counterparty-news", "metadata": {"company": name}},
-    )
-    return list(ответ.judgements)
+    сообщения = [
+        {"role": "system", "content": SYSTEM.format(
+            alarming=ALARMING, neutral=NEUTRAL, irrelevant=IRRELEVANT
+        )},
+        {"role": "user", "content": f"Компания: {name}\n\n" + "\n\n".join(блоки)},
+    ]
+
+    # Сначала бесплатный Groq, потом то, на чём работает диалог. Порядок важен
+    # в обе стороны: платить за разметку новости основной моделью не за что,
+    # но и блок пропадать не должен, когда бесплатная квота кончилась.
+    #
+    # Кончается она реально: замерено на живом сервере — 197 462 из 200 000
+    # токенов в сутки, и блок новостей отвечал «внешний поиск не отвечает»,
+    # то есть выдавал исчерпанную квоту за сбой связи.
+    пути = ([ОЦЕНЩИК] if key_for(ОЦЕНЩИК) else []) + [""]
+    последняя: Exception | None = None
+    for провайдер in пути:
+        try:
+            модель = LLMClient(provider=провайдер).chat(max_tokens=ОТВЕТ_ТОКЕНОВ)
+            ответ = модель.with_structured_output(_Assessment).invoke(
+                сообщения,
+                config={
+                    "run_name": "counterparty-news",
+                    "metadata": {"company": name, "provider": провайдер or "по умолчанию"},
+                },
+            )
+            return list(ответ.judgements)
+        except Exception as ошибка:  # noqa: BLE001 — решение о запасном пути здесь
+            последняя = ошибка
+    raise последняя or RuntimeError("оценщик новостей не настроен")
 
 
 def _items(found: list[dict], оценки: list[_Judgement]) -> tuple[Item, ...]:
