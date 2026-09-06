@@ -420,7 +420,14 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
                 zsk={{ known: zskKnown, value: zskValue }}
                 verdict={verdict}
               />
-              <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />
+              {/* Наша оценка сразу под чужими: два зелёных светофора, а под
+                  ними разбор, который с ними спорит. */}
+              <VerdictBanner
+                verdict={verdict}
+                bank={{ known: bankKnown, value: bankValue }}
+                zsk={{ known: zskKnown, value: zskValue }}
+                onOpenSection={onOpenBlock}
+              />
 
               {/* Противоречия сразу под вердиктом: это то, ради чего
                   пользователь пришёл, и читать до них восемь карточек

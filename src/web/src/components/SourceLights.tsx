@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { CheckmarkHexagonMIcon } from '@alfalab/icons-glyph/CheckmarkHexagonMIcon';
 
 import { AlfaWordmark, BankOfRussiaLogo } from './Logos';
 import type { Verdict, VerdictState } from '../verdict';
@@ -7,7 +8,7 @@ type Light = { known: boolean; value: string };
 
 type Tone = 'green' | 'orange' | 'red' | 'grey';
 
-function tone(light: Light): Tone {
+export function tone(light: Light): Tone {
   if (!light.known) return 'grey';
   if (light.value === 'Красный' || light.value === 'Высокий') return 'red';
   if (light.value === 'Жёлтый' || light.value === 'Средний') return 'orange';
@@ -55,13 +56,15 @@ const ZSK_WORDS: Record<Tone, string> = {
  * Три оценки контрагента в один ряд: наша, скоринг банка и платформа ЗСК Банка
  * России. Чужие две сервис не пересчитывает, только показывает.
  *
- * Своя стоит первой и подписана названием сервиса, а не логотипом: читатель
- * должен видеть, что вывод даёт та страница, на которой он находится, — иначе
- * третья плашка выглядит как ещё одно чужое мнение неизвестного происхождения.
+ * Своя стоит первой: читатель должен видеть, что вывод даёт та страница,
+ * на которой он находится, — иначе третья плашка выглядит как ещё одно чужое
+ * мнение неизвестного происхождения.
  *
- * Владелец каждой оценки назван своим знаком: знак читается раньше текста,
- * а «чья это оценка» — первое, что нужно знать, чтобы понять, почему сервис
- * чужую не оспаривает.
+ * Владелец каждой оценки назван своим знаком — наша в том числе, и потому её
+ * знак устроен как у Банка России: значок плюс название, той же высоты и того
+ * же веса. Заголовком с подчёркиванием она читалась раньше собственной оценки
+ * и выпадала из ряда: в ряду все «кто» должны звучать одинаково тихо, чтобы
+ * слышны были «что».
  *
  * Предмет измерения ушёл в подсказку, а не стоит подписью на плашке. На макете
  * плашка одна строка, и подпись под знаком банка означала бы, что мы объясняем
@@ -88,28 +91,31 @@ export function SourceLights({ bank, zsk, verdict }: {
   return (
     <div className="source-lights">
       <Rating
-        owner={<span className="rating__own">Проверка контрагента</span>}
+        owner={(
+          <span className="rating__brand">
+            <CheckmarkHexagonMIcon className="rating__brand-mark" />
+            <span className="rating__brand-name">Проверка контрагента</span>
+          </span>
+        )}
         title="Оценка сервиса по открытым данным: суды, взыскания, реестры, отчётность"
         tone={СВОЙ_ТОН[verdict.state]}
         words={verdict.word}
         note={ownGaps}
       />
-      <div className="source-lights__external">
-        <Rating
-          owner={<AlfaWordmark className="rating__logo rating__logo--alfa" />}
-          title="Скоринг Альфа-Банка"
-          tone={tone(bank)}
-          words={BANK_WORDS[tone(bank)]}
-          raw={bank.known ? bank.value : null}
-        />
-        <Rating
-          owner={<BankOfRussiaLogo className="rating__logo rating__logo--cbr" />}
-          title="Платформа «Знай своего клиента» Банка России"
-          tone={tone(zsk)}
-          words={ZSK_WORDS[tone(zsk)]}
-          raw={zsk.known ? zsk.value : null}
-        />
-      </div>
+      <Rating
+        owner={<AlfaWordmark className="rating__logo rating__logo--alfa" />}
+        title="Скоринг Альфа-Банка"
+        tone={tone(bank)}
+        words={BANK_WORDS[tone(bank)]}
+        raw={bank.known ? bank.value : null}
+      />
+      <Rating
+        owner={<BankOfRussiaLogo className="rating__logo rating__logo--cbr" />}
+        title="Платформа «Знай своего клиента» Банка России"
+        tone={tone(zsk)}
+        words={ZSK_WORDS[tone(zsk)]}
+        raw={zsk.known ? zsk.value : null}
+      />
     </div>
   );
 }
