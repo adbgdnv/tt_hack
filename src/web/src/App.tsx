@@ -418,7 +418,6 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
               <SourceLights
                 bank={{ known: bankKnown, value: bankValue }}
                 zsk={{ known: zskKnown, value: zskValue }}
-                own={report?.verdict}
                 verdict={verdict}
               />
               <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />

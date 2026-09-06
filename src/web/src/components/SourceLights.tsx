@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AlfaWordmark, BankOfRussiaLogo } from './Logos';
-import type { OwnVerdict } from '../types';
-import type { Verdict } from '../verdict';
+import type { Verdict, VerdictState } from '../verdict';
 
 type Light = { known: boolean; value: string };
 
@@ -17,7 +16,7 @@ function tone(light: Light): Tone {
 
 /** Своё состояние — в тот же цвет, что и чужие оценки. Отдельная палитра
  *  сделала бы из трёх плашек три разные шкалы. */
-const СВОЙ_ТОН: Record<OwnVerdict['state'], Tone> = {
+const СВОЙ_ТОН: Record<VerdictState, Tone> = {
   clean: 'green',
   clarify: 'orange',
   attention: 'red',
@@ -31,8 +30,8 @@ const СВОЙ_ТОН: Record<OwnVerdict['state'], Tone> = {
  *
  * Три оценки стоят рядом и потому обязаны называть, что именно каждая измеряет.
  * Банк считает надёжность контрагента по своей — нераскрываемой — методике,
- * ЗСК оценивает риск операций, сервис смотрит, сходятся ли разделы отчёта между
- * собой. Одинаковые слова на трёх плашках («низкий риск» × 3) читались бы как
+ * ЗСК оценивает риск операций, сервис смотрит открытые данные: суды, взыскания,
+ * реестры, отчётность. Одинаковые слова на трёх плашках («низкий риск» × 3) читались бы как
  * согласие трёх независимых источников, а весь смысл этого ряда в том, что они
  * расходятся: у МАКСМАРКЕТА два зелёных при 2,6 млрд ₽ исков.
  */
@@ -50,15 +49,7 @@ const ZSK_WORDS: Record<Tone, string> = {
   grey: 'оценки нет',
 };
 
-/** Запасные слова своей оценки — ровно те же, что у сервера (`compare.СЛОВАМИ`).
- *  Своих формулировок здесь быть не должно: одна компания называлась бы в отчёте
- *  и в сравнении по-разному, а различить, две это оценки или одна, читателю
- *  было бы нечем. Нужны, только когда отчёт собран без сервера. */
-const OWN_FALLBACK: Record<Verdict['level'], string> = {
-  clean: 'вопросов нет',
-  clarify: 'есть вопросы',
-  attention: 'осторожнее',
-};
+
 
 /**
  * Три оценки контрагента в один ряд: наша, скоринг банка и платформа ЗСК Банка
@@ -75,29 +66,32 @@ const OWN_FALLBACK: Record<Verdict['level'], string> = {
  * Предмет измерения ушёл в подсказку, а не стоит подписью на плашке. На макете
  * плашка одна строка, и подпись под знаком банка означала бы, что мы объясняем
  * и чужую методику тоже, — а её нам не раскрывают.
+ *
+ * Свой вывод приходит готовым из `deriveVerdict` — тем же вызовом, что и баннер
+ * «Обратить внимание» ниже. Второго правила у плашки нет намеренно: пока их было
+ * два — на сервере по расхождениям между разделами, на экране по сигнальным
+ * разделам, — они расходились у 116 компаний из 200. У восемнадцати баннер
+ * говорил «обратить внимание», а плашка над ним — «вопросов нет». Худший случай:
+ * СРО «СОМ», 1,26 млрд ₽ исков как ответчику и зелёная плашка.
  */
-export function SourceLights({ bank, zsk, own, verdict }: {
+export function SourceLights({ bank, zsk, verdict }: {
   bank: Light;
   zsk: Light;
-  /** Оценка сервера. Слова и четвёртое состояние — его, не наши. */
-  own?: OwnVerdict;
-  /** Тот же вывод, посчитанный на клиенте: нужен, когда отчёта сервера нет. */
+  /** Вывод сервиса — тот же, что показывает баннер ниже. */
   verdict: Verdict;
 }) {
-  const ownTone = own ? СВОЙ_ТОН[own.state] : СВОЙ_ТОН[verdict.level];
-  const ownWords = own ? own.wording : OWN_FALLBACK[verdict.level];
   // «Оценить нечем» без ответа «чего именно не хватило» — половина ответа.
-  const ownGaps = own?.state === 'unknown' && own.gaps.length > 0
-    ? `нет данных: ${own.gaps.join(', ').toLowerCase()}`
+  const ownGaps = verdict.state === 'unknown' && verdict.gaps.length > 0
+    ? `нет данных: ${verdict.gaps.join(', ').toLowerCase()}`
     : null;
 
   return (
     <div className="source-lights">
       <Rating
         owner={<span className="rating__own">Проверка контрагента</span>}
-        title="Оценка сервиса: сходятся ли разделы отчёта между собой"
-        tone={ownTone}
-        words={ownWords}
+        title="Оценка сервиса по открытым данным: суды, взыскания, реестры, отчётность"
+        tone={СВОЙ_ТОН[verdict.state]}
+        words={verdict.word}
         note={ownGaps}
       />
       <div className="source-lights__external">

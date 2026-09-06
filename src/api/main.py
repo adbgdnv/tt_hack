@@ -159,19 +159,13 @@ def get_report(inn: str) -> dict:
     record = repo.by_inn(inn)
     if record is None:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    ответ = _serialize(report_view.build(record))
-    # Своя оценка едет вместе с отчётом, а не отдельной ручкой: она посчитана
-    # из той же записи и стоит на том же экране. Замерено — сборка вердикта
-    # 0,2 мс против 0,3 мс у самого отчёта, второй проход бесплатен.
-    вердикт = compare_view.verdict(record)
-    ответ["verdict"] = {
-        "state": compare_view.state(вердикт),
-        "wording": compare_view.СЛОВАМИ[compare_view.state(вердикт)],
-        "gaps": вердикт.gaps,
-        "checks_passed": вердикт.checks_passed,
-        "checks_total": вердикт.checks_total,
-    }
-    return ответ
+    # Своей оценки здесь нет намеренно. Она считается на экране одним вызовом
+    # вместе с баннером «Обратить внимание»: пока правил было два — на сервере
+    # по расхождениям между разделами, на экране по сигнальным разделам, — они
+    # расходились у 116 компаний из 200, и у восемнадцати сервер говорил
+    # «вопросов нет» там, где баннер на той же странице говорил «обратить
+    # внимание». Отчёт отдаёт разделы; вывод из них делает одно место.
+    return _serialize(report_view.build(record))
 
 
 @app.get("/counterparties/{inn}/news")
