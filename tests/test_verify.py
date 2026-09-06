@@ -99,3 +99,36 @@ def test_проверка_не_ходит_в_сеть():
     итог = verify.check("17 дел и 9 лет.", ОТЧЁТ)
 
     assert итог.checked is False
+
+
+def test_числа_второго_отчёта_подтверждаются():
+    """Неочевидная поломка разбора пула: с одним отчётом настоящие числа
+    второй компании помечались бы как неподтверждённые — продукт обвинял бы
+    модель в выдумывании того, что честно прочитал."""
+    второй = build(
+        {
+            "baseInfo": {
+                "inn": "7704310756",
+                "shortName": 'ООО "ВТОРОЙ"',
+                "riskLevel": "LOW",
+                "registrationInfo": {"yearsFromRegistration": 14},
+            },
+            "status": {"status": "CURRENT"},
+            "zskRiskLevel": "GREEN",
+            "reputationalRisks": {"negative": [], "positive": []},
+            "arbitrationByStatus": {"commonCount": 42},
+        }
+    )
+
+    один = verify.check("Дел у второго 42.", ОТЧЁТ)
+    пул = verify.check("Дел у второго 42.", [ОТЧЁТ, второй])
+
+    assert один.unverified == 1, "сторож: с одним отчётом число и правда не находится"
+    assert пул.unverified == 0
+
+
+def test_выдуманное_не_подтверждается_и_в_пуле():
+    """Расширение проверки не должно превращать её в отсутствие проверки."""
+    итог = verify.check("Дел 999 999.", [ОТЧЁТ, ОТЧЁТ])
+
+    assert итог.unverified == 1

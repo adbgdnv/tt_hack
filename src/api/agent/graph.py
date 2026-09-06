@@ -37,6 +37,11 @@ MAX_STEPS = 6
 # съело весь бюджет выхода. Запас обязателен при любой модели с рассуждением.
 MAX_TOKENS = 1500
 
+# Резерв на ответ о нескольких компаниях. Замерено на живом прогоне: ответ
+# про троих обрывался на полуслове ровно на полутора тысячах — три компании
+# это втрое больше текста, а обрезанный ответ читается как поломка.
+POOL_MAX_TOKENS = 3000
+
 # Сколько ждём молчащий путь, прежде чем взять следующий. Клиент по умолчанию
 # ждёт 90 секунд, и один такой случай замерен: ответ пришёл через 152 секунды —
 # 90 на зависший основной путь плюс работа запасного. Тот же вопрос в трёх
@@ -49,15 +54,43 @@ TIMEOUT = 30.0
 class Context:
     """Всё, что агенту нужно знать сверх переписки.
 
-    `record` — сырая запись из набора. Её читают инструменты; в модель она
-    не уходит. `report` — то же самое в виде, который видит пользователь.
+    Пул компаний, а не одна: разбор одной компании — это пул из одного, и код
+    ниже перестаёт знать, сколько их. Два способа хранить одно и то же
+    разъехались бы в первый же день.
+
+    `records` — сырые записи из набора по ИНН. Их читают инструменты; в модель
+    они не уходят. `reports` — то же самое в виде, который видит пользователь.
     """
 
-    record: dict
-    report: Report
+    records: dict[str, dict]
+    reports: dict[str, Report]
+
+    @classmethod
+    def one(cls, record: dict, report: Report) -> Context:
+        """Пул из одной компании — обычный разбор отчёта."""
+        return cls(records={report.inn: record}, reports={report.inn: report})
+
+    @property
+    def alone(self) -> str | None:
+        """ИНН единственной компании пула. Нужен инструментам: пока компания
+        одна, называть её незачем, и старое поведение сохраняется."""
+        return next(iter(self.reports)) if len(self.reports) == 1 else None
+
+    def pick(self, inn: str | None) -> str | None:
+        """ИНН, о котором спросили. Без ИНН и с одной компанией — она."""
+        if inn:
+            цифры = "".join(с for с in inn if с.isdigit())
+            return цифры if цифры in self.reports else None
+        return self.alone
 
 
-def build(tools: list[BaseTool], system_prompt: str, provider: str = "", model: str = ""):
+def build(
+    tools: list[BaseTool],
+    system_prompt: str,
+    provider: str = "",
+    model: str = "",
+    max_tokens: int = MAX_TOKENS,
+):
     """Собирает агента. Список инструментов задаёт вызывающий.
 
     Инструменты приходят снаружи, а не собираются здесь: их набор зависит от
@@ -74,7 +107,7 @@ def build(tools: list[BaseTool], system_prompt: str, provider: str = "", model: 
         # Глубина рассуждения не задаётся здесь: её знает провайдер. У gpt-oss
         # на Groq рассуждение тратится из бюджета ответа и требует ограничения,
         # у моделей OpenRouter такого параметра нет вовсе.
-        client.chat(max_tokens=MAX_TOKENS),
+        client.chat(max_tokens=max_tokens),
         tools,
         system_prompt=system_prompt,
         context_schema=Context,

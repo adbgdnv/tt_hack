@@ -220,7 +220,7 @@ export type ToolCall = {
   sources?: ToolSource[];
   /** Данные, взятые по теме. Показываются целиком: модель не должна видеть
    *  того, чего не видит пользователь, иначе ответ станет нечем сверить. */
-  lookup?: { topic: string; text: string };
+  lookup?: { topic: string; text: string; company?: string };
 };
 
 /**

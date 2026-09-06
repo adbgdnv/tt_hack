@@ -135,7 +135,7 @@ async def test_отказ_первого_пути_переводит_на_зап
     )
     построено = []
 
-    def сборка(_tools, _system, provider="", model=""):
+    def сборка(_tools, _system, provider="", model="", **_):
         построено.append(model)
         if len(построено) == 1:
             return ПодставнойАгент(ошибка=RuntimeError("модель легла"))
@@ -160,7 +160,7 @@ async def test_после_показанного_текста_запасной_�
     )
     построено = []
 
-    def сборка(_tools, _system, provider="", model=""):
+    def сборка(_tools, _system, provider="", model="", **_):
         построено.append(model)
         return ПодставнойАгент([кусок("Начал отвечать")], ошибка=RuntimeError("оборвалось"))
 
@@ -183,7 +183,7 @@ async def test_молчание_первой_модели_переводит_н�
     )
     построено = []
 
-    def сборка(_tools, _system, provider="", model=""):
+    def сборка(_tools, _system, provider="", model="", **_):
         построено.append(model)
         куски = [кусок("")] if len(построено) == 1 else [кусок("Ответ.")]
         return ПодставнойАгент(куски)

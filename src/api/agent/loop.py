@@ -31,8 +31,9 @@ from dataclasses import asdict, dataclass, field, replace
 from langchain_core.messages import AIMessage, ToolMessage
 
 from api.agent import events, graph, prompt
+from core import compare, verify
 from core import deal as deals
-from core import verify
+from core import report as report_view
 from core.charts import build_charts
 from core.deal import Deal
 from core.llm import PRIMARY, LLMClient, Route, chain, environment
@@ -210,7 +211,7 @@ def _harvest(
 
 
 async def _second_opinion(
-    report: Report, checked: verify.Verification, route: Route
+    report, checked: verify.Verification, route: Route
 ) -> verify.Verification:
     """Спрашивает модель про числа, которых сверка не нашла.
 
@@ -221,13 +222,16 @@ async def _second_opinion(
     """
     спорные = [(номер, c) for номер, c in enumerate(checked.claims, 1) if not c.found]
     перечень = "\n".join(f"{номер}) «{c.number}» — {c.context}" for номер, c in спорные)
-    вопрос = ВТОРАЯ_СТУПЕНЬ.format(report=prompt.render_report(report), claims=перечень)
+    отчёты = report if isinstance(report, list) else [report]
+    вопрос = ВТОРАЯ_СТУПЕНЬ.format(
+        report="\n\n".join(prompt.render_report(о) for о in отчёты), claims=перечень
+    )
     try:
         ответ = await asyncio.to_thread(
             LLMClient(provider=route.provider, model=route.model).ask,
             [{"role": "user", "content": вопрос}],
             max_tokens=300,
-            inn=report.inn,
+            inn=отчёты[0].inn,
         )
     except Exception:  # noqa: BLE001 — сеть; первая ступень уже дала результат
         return checked
@@ -244,7 +248,7 @@ async def _second_opinion(
 
 
 async def _verified(
-    report: Report, text: str, route: Route, extras: tuple[str, ...] = ()
+    report, text: str, route: Route, extras: tuple[str, ...] = ()
 ) -> verify.Verification:
     """Проверка ответа лестницей: сначала кодом, моделью — только если не сошлось.
 
@@ -264,16 +268,24 @@ def _text_of(messages: list) -> str:
     return _harvest(messages)[0]
 
 
-def _shown(lookups: tuple[dict, ...], sources: tuple[dict, ...]) -> tuple[str, ...]:
+def _shown(
+    lookups: tuple[dict, ...], sources: tuple[dict, ...], deal: Deal | None = None
+) -> tuple[str, ...]:
     """Всё, что пользователь увидел рядом с ответом, кроме самого отчёта.
 
-    Проверка сверяет ответ с этим наравне с отчётом: взятое по теме и выдержка
-    из внешнего источника лежат у пользователя на экране, значит числа из них —
-    такое же основание, как числа отчёта.
+    Проверка сверяет ответ с этим наравне с отчётом: взятое по теме, выдержка
+    из внешнего источника и условия сделки лежат у пользователя на экране,
+    значит числа из них — такое же основание, как числа отчёта.
+
+    Условия сделки попали сюда после живого прогона: «отсрочка на 60 дней»
+    в ответе помечалась неподтверждённой, потому что шестидесяти дней нет
+    ни в одном отчёте. Продукт обвинял модель в выдумывании числа, которое
+    назвал сам пользователь.
     """
     взятое = tuple(тема.get("text", "") for тема in lookups)
     находки = tuple(f"{ссылка.get('title', '')} {ссылка.get('snippet', '')}" for ссылка in sources)
-    return взятое + находки
+    условия = (prompt.render_deal(deal),) if deal else ()
+    return взятое + находки + условия
 
 
 def _routes() -> tuple[Route, ...]:
@@ -314,7 +326,7 @@ async def run(
         try:
             result = await agent.ainvoke(
                 {"messages": prompt.conversation(question, state.history)},
-                context=graph.Context(record=record, report=report),
+                context=graph.Context.one(record, report),
                 config=_trace(report, путь),
             )
         except Exception as error:  # noqa: BLE001 — решение о запасном пути принимаем здесь
@@ -348,39 +360,24 @@ async def run(
     )
 
 
-async def run_stream(
+async def _stream(
     state: Session,
-    report: Report,
-    record: dict,
+    системный: str,
+    context: graph.Context,
+    charts: dict,
     question: str,
-    tools: list | None = None,
+    tools: list | None,
+    reports: list[Report],
     deal: Deal | None = None,
+    max_tokens: int = graph.MAX_TOKENS,
 ) -> AsyncIterator[events.Event]:
-    """Прогоняет шаг диалога, отдавая события по мере работы агента.
+    """Общая машинерия потока: пути отхода, события, проверка, `done`.
 
-    Асинхронный намеренно. Синхронный генератор Starlette крутит в пуле потоков,
-    и каждый поток занят всё время ответа: на длинных потоках пул кончается
-    и блокирует весь сервис, включая обычные ручки. Одновременных пользователей
-    при этом было бы столько, сколько потоков в пуле.
-
-    Отличается от `run` не только транспортом: здесь у модели есть инструменты,
-    и запись о контрагенте целиком уезжает в контекст выполнения, откуда её
-    читают они. В промпт запись не попадает — модель должна видеть ровно то,
-    что видит пользователь.
-
-    Непотоковый `run` рядом — для клиентов, которые событий не понимают. Агент
-    у них общий, поэтому расходиться в возможностях им больше нечем.
+    Вынесена, потому что потоков стало два — по одной компании и по пулу, —
+    а отличаются они только собранным промптом и контекстом. Копия разошлась бы
+    с оригиналом ровно так же, как когда-то разошлись `run` и `run_stream`:
+    правило добавили в один канал и забыли про второй.
     """
-    state.focus(report.inn)
-    # Условия сделки — первым событием, до единого токена ответа. Часть из них
-    # разобрана из самой реплики, и человек должен видеть, что у нас сохранилось,
-    # раньше, чем прочтёт ответ, построенный на этом.
-    сделка = state.situation(question, deal)
-    yield events.Event("deal", asdict(сделка))
-    charts = {c.key: c for c in build_charts(record)}
-    titles = [c.title for c in charts.values()]
-    системный = prompt.system_prompt(report, titles, question, сделка)
-
     пути = _routes()
     said: list[str] = []
     # Всё, что уехало пользователю кроме текста: проверка сверяет ответ и с этим.
@@ -388,16 +385,23 @@ async def run_stream(
     внешнее: list[dict] = []
     отказ = ""
     путь = пути[0]
+    главный = reports[0]
     for номер, путь in enumerate(пути):
-        agent = graph.build(tools or [], системный, provider=путь.provider, model=путь.model)
+        agent = graph.build(
+            tools or [],
+            системный,
+            provider=путь.provider,
+            model=путь.model,
+            max_tokens=max_tokens,
+        )
         translator = events.Translator(charts)
         сказано = len(said)
         try:
             stream = agent.astream(
                 {"messages": prompt.conversation(question, state.history)},
-                context=graph.Context(record=record, report=report),
+                context=context,
                 stream_mode="messages",
-                config=_trace(report, путь),
+                config=_trace(главный, путь),
             )
             async for chunk, _meta in stream:
                 for event in translator.feed(chunk):
@@ -439,9 +443,104 @@ async def run_stream(
         # чем он подтверждён, догоняет его через секунду. Задерживать ради неё
         # первое слово значило бы платить за проверку задержкой всего ответа.
         yield _check_event(
-            await _verified(report, text, путь, _shown(tuple(показанное), tuple(внешнее)))
+            await _verified(reports, text, путь, _shown(tuple(показанное), tuple(внешнее), deal))
         )
-    yield events.Event("done", {"sections": list(_grounding(report, text))})
+    # Разделы отмечаются по главному отчёту: в разборе пула их у каждой компании
+    # свои, и мешать их в один список значило бы приписать раздел не той.
+    отмечены = _grounding(главный, text) if len(reports) == 1 else ()
+    yield events.Event("done", {"sections": list(отмечены)})
+
+
+async def run_stream(
+    state: Session,
+    report: Report,
+    record: dict,
+    question: str,
+    tools: list | None = None,
+    deal: Deal | None = None,
+) -> AsyncIterator[events.Event]:
+    """Прогоняет шаг диалога, отдавая события по мере работы агента.
+
+    Асинхронный намеренно. Синхронный генератор Starlette крутит в пуле потоков,
+    и каждый поток занят всё время ответа: на длинных потоках пул кончается
+    и блокирует весь сервис, включая обычные ручки. Одновременных пользователей
+    при этом было бы столько, сколько потоков в пуле.
+
+    Отличается от `run` не только транспортом: здесь у модели есть инструменты,
+    и запись о контрагенте целиком уезжает в контекст выполнения, откуда её
+    читают они. В промпт запись не попадает — модель должна видеть ровно то,
+    что видит пользователь.
+
+    Непотоковый `run` рядом — для клиентов, которые событий не понимают. Агент
+    у них общий, поэтому расходиться в возможностях им больше нечем.
+    """
+    state.focus(report.inn)
+    # Условия сделки — первым событием, до единого токена ответа. Часть из них
+    # разобрана из самой реплики, и человек должен видеть, что у нас сохранилось,
+    # раньше, чем прочтёт ответ, построенный на этом.
+    сделка = state.situation(question, deal)
+    yield events.Event("deal", asdict(сделка))
+    charts = {c.key: c for c in build_charts(record)}
+    titles = [c.title for c in charts.values()]
+    системный = prompt.system_prompt(report, titles, question, сделка)
+
+    async for событие in _stream(
+        state=state,
+        системный=системный,
+        context=graph.Context.one(record, report),
+        charts=charts,
+        question=question,
+        tools=tools,
+        reports=[report],
+        deal=сделка,
+    ):
+        yield событие
+
+
+async def run_pool_stream(
+    state: Session,
+    records: list[dict],
+    question: str,
+    tools: list | None = None,
+    deal: Deal | None = None,
+) -> AsyncIterator[events.Event]:
+    """Разбор нескольких компаний сразу.
+
+    Та же машинерия, что у разбора одной, — отличается собранный контекст:
+    вместо отчёта одной компании в модель идёт готовый вывод сравнения,
+    посчитанный кодом. Положив отчёты всех, мы дали бы модели заново вывести
+    порядок и получили бы второй, спорящий с экраном.
+
+    Графиков здесь нет: интерфейс рисует их из уже загруженного отчёта, а на
+    экране сравнения отчётов нет. Инструмент об этом скажет словами.
+    """
+    отчёты = [report_view.build(з) for з in records]
+    # Порядок — тот же, что на экране: вывод сравнения его и задаёт.
+    вердикты = compare.compare(records)
+    по_инн = {о.inn: о for о in отчёты}
+    порядок = [по_инн[в.inn] for в in вердикты if в.inn in по_инн]
+
+    state.focus("+".join(в.inn for в in вердикты))
+    сделка = state.situation(question, deal)
+    yield events.Event("deal", asdict(сделка))
+
+    async for событие in _stream(
+        state=state,
+        системный=prompt.pool_prompt(
+            вердикты, compare.summary(вердикты), порядок or отчёты, сделка
+        ),
+        context=graph.Context(
+            records={о.inn: з for о, з in zip(отчёты, records, strict=True)},
+            reports=по_инн,
+        ),
+        charts={},
+        question=question,
+        tools=tools,
+        reports=порядок or отчёты,
+        deal=сделка,
+        max_tokens=graph.POOL_MAX_TOKENS,
+    ):
+        yield событие
 
 
 def _check_event(итог: verify.Verification) -> events.Event:

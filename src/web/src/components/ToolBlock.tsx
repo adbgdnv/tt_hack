@@ -61,6 +61,12 @@ export function ToolBlock({
           {MARKS[call.state]}
         </span>
         <span className="tool-block__title">{call.title}</span>
+        {/* Чья это выписка. В разборе пула подряд идут три одинаковых
+            «Запросил данные», и без имени непонятно, к кому они относятся.
+            В разборе одной компании имени не приходит вовсе. */}
+        {call.lookup?.company && (
+          <span className="tool-block__company">{call.lookup.company}</span>
+        )}
       </button>
 
       {/* Без подписей Collapse не рисует собственный переключатель — только

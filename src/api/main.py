@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api import news
+from api.agent import events as events_module
 from api.agent import loop
 from api.agent import tools as agent_tools
 from core import compare as compare_view
@@ -97,6 +98,16 @@ class ChatRequest(BaseModel):
 
     message: str
     inn: str
+    session_id: str = "default"
+    deal: DealIn | None = None
+
+
+class PoolChatRequest(BaseModel):
+    """Вопрос сразу о нескольких контрагентах. Те же ИНН, что на экране
+    сравнения: разбор и экран должны говорить об одном составе."""
+
+    message: str
+    inns: list[str]
     session_id: str = "default"
     deal: DealIn | None = None
 
@@ -195,6 +206,11 @@ async def compare(request: CompareRequest) -> dict:
     Неизвестный ИНН не роняет запрос: он называется отдельным полем. Молча
     выбросить компанию из пула значит соврать о составе сравнения.
     """
+    if len(dict.fromkeys(request.inns)) > compare_view.ПРЕДЕЛ_ПУЛА:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Сравнивать можно не больше {compare_view.ПРЕДЕЛ_ПУЛА} контрагентов сразу",
+        )
     записи, ненайденные = [], []
     for inn in dict.fromkeys(request.inns):  # порядок сохраняем, дубли убираем
         запись = repo.by_inn(inn)
@@ -206,6 +222,52 @@ async def compare(request: CompareRequest) -> dict:
         "summary": asdict(compare_view.summary(вердикты)),
         "not_found": ненайденные,
     }
+
+
+@app.post("/compare/chat/stream")
+async def compare_chat_stream(request: PoolChatRequest) -> StreamingResponse:
+    """Разбор нескольких контрагентов сразу, событиями по мере работы агента.
+
+    Тот же поток, что у разбора одной компании, — и та же машинерия под ним.
+    Отличается контекст: в модель идёт готовый вывод сравнения, посчитанный
+    кодом, а не отчёты всех компаний. Иначе модель вывела бы порядок заново
+    и заспорила с экраном.
+
+    Неизвестный ИНН молча не выбрасывается: пул из двух вместо трёх — это
+    другой вопрос, чем задал пользователь.
+    """
+    if len(dict.fromkeys(request.inns)) > compare_view.ПРЕДЕЛ_ПУЛА:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Разбирать можно не больше {compare_view.ПРЕДЕЛ_ПУЛА} контрагентов сразу",
+        )
+    записи, ненайденные = [], []
+    for inn in dict.fromkeys(request.inns):
+        запись = repo.by_inn(inn)
+        (записи if запись is not None else ненайденные).append(запись or inn)
+    if not записи:
+        raise HTTPException(status_code=404, detail="Ни одного контрагента не найдено")
+
+    session = loop.session(request.session_id)
+    сделка = request.deal.to_deal() if request.deal else None
+
+    async def events():
+        if ненайденные:
+            yield events_module.Event(
+                "error",
+                {"detail": f"Не найдены в наборе: {', '.join(ненайденные)}. Разбираю остальных."},
+            ).encode()
+        поток = loop.run_pool_stream(
+            session, записи, request.message, agent_tools.build_pool(записи), сделка
+        )
+        async for событие in поток:
+            yield событие.encode()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/chat/stream")

@@ -93,17 +93,43 @@ def chart_result(record: dict, inn: str, kind: str) -> tuple[str, dict]:
     )
 
 
+def _не_та_компания(context: Context, inn: str | None) -> str:
+    """Что ответить, когда компания не названа или названа не та.
+
+    Перечисляем пул, а не молчим: пустота заполняется правдоподобным, а перечень
+    возвращает модель в рамки. Тот же приём, что у видов графика и тем.
+    """
+    кто = ", ".join(f"{о.name} — ИНН {и}" for и, о in context.reports.items())
+    если_названа = f" Компании «{inn}» в разборе нет." if inn else ""
+    return f"Назови ИНН компании.{если_названа} Сейчас разбираются: {кто}."
+
+
 @tool(response_format="content_and_artifact")
-def show_chart(kind: str) -> tuple[str, dict]:
+def show_chart(kind: str, inn: str = "") -> tuple[str, dict]:
     """Показать пользователю график по компании из отчёта.
 
     Виды графиков:
     {kinds}
     Другие виды построить нельзя. Если у компании нет данных для выбранного вида,
     инструмент так и скажет и перечислит доступные.
+
+    `inn` нужен, только когда в разборе несколько компаний.
     """
     runtime = get_runtime(Context)
-    return chart_result(runtime.context.record, runtime.context.report.inn, kind)
+    выбран = runtime.context.pick(inn)
+    if выбран is None:
+        # В разборе нескольких компаний график не рисуется вовсе: интерфейс
+        # строит его из уже загруженного отчёта, а на экране сравнения отчётов
+        # нет. Рисовать из пришедших с ответом чисел значило бы сломать
+        # единственное правило, которое держит проверяемость.
+        if len(runtime.context.reports) > 1:
+            return (
+                "В разборе нескольких компаний график не показывается. "
+                "Скажи об этом словами и предложи открыть отчёт компании.",
+                {},
+            )
+        return _не_та_компания(runtime.context, inn), {}
+    return chart_result(runtime.context.records[выбран], выбран, kind)
 
 
 # Описание достаётся модели как есть, поэтому список видов подставляем в него,
@@ -112,7 +138,7 @@ show_chart.description = (show_chart.description or "").replace("{kinds}", CHART
 
 
 @tool(response_format="content_and_artifact")
-def look_up(topic: str) -> tuple[str, dict]:
+def look_up(topic: str, inn: str = "") -> tuple[str, dict]:
     """Посмотреть данные о компании по теме, которой нет в отчёте.
 
     Отчёт показывает не всё: в нём нет системы налогообложения, лицензий,
@@ -123,9 +149,14 @@ def look_up(topic: str) -> tuple[str, dict]:
     {topics}
     Других тем нет. Взятое по теме увидит и пользователь, поэтому ссылайся
     на него в ответе так же свободно, как на отчёт.
+
+    `inn` нужен, только когда в разборе несколько компаний.
     """
     runtime = get_runtime(Context)
-    текст = look_up_topic(runtime.context.record, topic)
+    выбран = runtime.context.pick(inn)
+    if выбран is None:
+        return _не_та_компания(runtime.context, inn), {}
+    текст = look_up_topic(runtime.context.records[выбран], topic)
     if топики.topic(topic) is None:
         # Промах по названию темы — не данные, а подсказка модели: перечень
         # доступных тем. В ленту его показывать нечего, и блок вызова с текстом
@@ -134,10 +165,28 @@ def look_up(topic: str) -> tuple[str, dict]:
     # Пользователю показываем ровно то, что увидела модель. Иначе она отвечает
     # по данным, которых нет на экране, и проверить ответ становится нечем —
     # а проверяемость и есть заявленная ценность продукта.
-    return текст, {"lookup": {"topic": topic, "text": текст}}
+    взятое = {"topic": topic, "text": текст}
+    if runtime.context.alone is None:
+        # Имя компании — только когда их несколько. В разборе одной оно повторяет
+        # заголовок экрана, а в пуле без него три блока «Запросил данные» подряд
+        # неразличимы, и непонятно, чьи это данные.
+        взятое["company"] = runtime.context.reports[выбран].name
+    return текст, {"lookup": взятое}
 
 
 look_up.description = (look_up.description or "").replace("{topics}", catalogue())
+
+
+def build_pool(records: list[dict]) -> list:
+    """Инструменты для разбора нескольких компаний.
+
+    Тот же набор минус график: интерфейс рисует график из уже загруженного
+    отчёта, а на экране сравнения отчётов нет. Отдавать модели инструмент,
+    результат которого некуда показать, — значит обещать то, чего нет.
+    """
+    from api.agent import search
+
+    return [look_up, *search.tools()]
 
 
 def build(record: dict, inn: str) -> list:

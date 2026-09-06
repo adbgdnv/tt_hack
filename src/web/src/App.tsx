@@ -94,13 +94,16 @@ function AppHeader({ compact, onHome, mode, onMode, children }: {
   );
 }
 
-function ComparePage({ pool, result, failed, onAdd, onRemove, onOpenReport }: {
+function ComparePage({ pool, result, failed, asking, setAsking, onAdd, onRemove, onOpenReport, onToast }: {
   pool: string[];
   result: CompareResult | null;
   failed: boolean;
+  asking: boolean;
+  setAsking: (open: boolean) => void;
   onAdd: (inn: string) => void;
   onRemove: (inn: string) => void;
   onOpenReport: (inn: string, section?: string) => void;
+  onToast: (message: string) => void;
 }) {
   return (
     <main className="page compare-page">
@@ -130,6 +133,21 @@ function ComparePage({ pool, result, failed, onAdd, onRemove, onOpenReport }: {
           summary={result.summary}
           onOpenReport={onOpenReport}
         />
+      )}
+
+      {/* Разбор под сравнением, а не сбоку: сравнение читают сверху вниз,
+          и вопрос задают, дочитав. Панель та же, что в отчёте, — расходиться
+          двум разборам нельзя. */}
+      {pool.length > 0 && (
+        <Suspense fallback={<div className="chat-band chat-band--loading">Загрузка разбора…</div>}>
+          <ChatPanel
+            report={null}
+            pool={pool}
+            expanded={asking}
+            onExpanded={setAsking}
+            onToast={onToast}
+          />
+        </Suspense>
       )}
     </main>
   );
@@ -447,6 +465,9 @@ export default function App() {
   const [pool, setPool] = useState<string[]>([]);
   const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
   const [compareFailed, setCompareFailed] = useState(false);
+  // Раскрытие разбора на экране сравнения — своё: экраны независимы,
+  // и раскрытый разбор пула не должен раскрывать разбор отчёта.
+  const [poolAsking, setPoolAsking] = useState(false);
   const [query, setQueryState] = useState('');
   const [suggestions, setSuggestions] = useState<Counterparty[]>([]);
   const [searching, setSearching] = useState(false);
@@ -634,6 +655,9 @@ export default function App() {
             pool={pool}
             result={compareResult}
             failed={compareFailed}
+            asking={poolAsking}
+            setAsking={setPoolAsking}
+            onToast={setToast}
             onAdd={addToPool}
             onRemove={removeFromPool}
             onOpenReport={(inn, section) => {

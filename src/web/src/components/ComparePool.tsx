@@ -47,6 +47,10 @@ export function ComparePool({
   onAdd: (inn: string) => void;
   onRemove: (inn: string) => void;
 }) {
+  // Предел продуктовый, а не технический: вывод о восьми ещё вывод,
+  // о двадцати — список, который снова надо читать.
+  const ПРЕДЕЛ = 8;
+  const полон = pool.length >= ПРЕДЕЛ;
   const поИнн = new Map(verdicts.map((в) => [в.inn, в]));
   const пропавшие = new Set(notFound);
   const [ввод, setВвод] = useState('');
@@ -77,6 +81,7 @@ export function ComparePool({
   }, [ввод]);
 
   const выбрать = (inn: string) => {
+    if (полон) return;
     onAdd(inn);
     setВвод('');
     setПодсказки([]);
@@ -84,7 +89,7 @@ export function ComparePool({
 
   return (
     <section className="pool" aria-label="Пул контрагентов">
-      <span className="lbl">Пул · {pool.length}</span>
+      <span className="lbl">Пул · {pool.length} из {ПРЕДЕЛ}</span>
 
       <div className="pool__items">
         {pool.map((inn) => {
@@ -125,8 +130,9 @@ export function ComparePool({
           size={40}
           block
           clear="auto"
+          disabled={полон}
           value={ввод}
-          placeholder="ИНН, название или ФИО руководителя"
+          placeholder={полон ? `Больше ${ПРЕДЕЛ} сравнивать не даём` : 'ИНН, название или ФИО руководителя'}
           aria-label="Добавить контрагента в пул"
           onChange={(_, { value }) => setВвод(value)}
         />

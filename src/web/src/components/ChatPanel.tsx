@@ -71,6 +71,23 @@ function dealQuestions(deal: Deal): string[] {
   return questions;
 }
 
+/** Вопросы про группу. У пула нет разделов, и спрашивают о нём другое. */
+const ВОПРОСЫ_ПУЛА: string[] = [
+  'Кому из них можно дать отсрочку?',
+  'У кого выше риск неплатежа?',
+  'С кем осторожнее и почему?',
+  'Чем они различаются по финансам?',
+];
+
+/** Пул из одной компании. Вопросы «кому из них» здесь бессмысленны, а разделов,
+ *  по которым их собирают в отчёте, на экране сравнения нет. */
+const ВОПРОСЫ_ОДНОЙ: string[] = [
+  'Стоит ли с ними работать?',
+  'Что настораживает в первую очередь?',
+  'Чего в данных не хватает?',
+  'Что уточнить перед сделкой?',
+];
+
 /** Пул шире видимых трёх вопросов: использованный вопрос сразу заменяется следующим. */
 function suggestionPool(report: CounterpartyReport | null, deal: Deal): string[] {
   if (!report) return ['Что можно проверить в отчёте?'];
@@ -102,19 +119,21 @@ function suggestionPool(report: CounterpartyReport | null, deal: Deal): string[]
  * Ответ без чисел не показывает ничего: «проверять было нечего» — не то же
  * самое, что «подтверждено», и выдавать одно за другое нельзя.
  */
-function AnswerCheckLine({ check }: { check: AnswerCheck }) {
+function AnswerCheckLine({ check, many = false }: { check: AnswerCheck; many?: boolean }) {
   if (check.total === 0) return null;
   const confirmed = check.total - check.unverified.length;
   return (
     <div className={`answer-check${check.unverified.length ? ' answer-check--doubt' : ''}`}>
       <span>
-        Числа сверены с отчётом: {confirmed} из {check.total}
+        {/* В разборе пула числа сверяются с отчётами всех компаний, а не одной:
+            иначе настоящее число второй компании оказалось бы «не найдено». */}
+        Числа сверены с {many ? 'отчётами' : 'отчётом'}: {confirmed} из {check.total}
       </span>
       {check.unverified.length > 0 && (
         <ul>
           {check.unverified.map((claim) => (
             <li key={`${claim.number}-${claim.context}`}>
-              <b>{claim.number}</b> — в отчёте не нашлось: {claim.context}
+              <b>{claim.number}</b> — {many ? 'в отчётах' : 'в отчёте'} не нашлось: {claim.context}
             </li>
           ))}
         </ul>
@@ -164,8 +183,12 @@ function AnswerFeedback({ value, onChange }: {
   );
 }
 
-export function ChatPanel({ report, expanded, onExpanded, onToast }: {
+export function ChatPanel({ report, pool, expanded, onExpanded, onToast }: {
   report: CounterpartyReport | null;
+  /** Пул сравнения. Задан — разбор идёт про несколько компаний сразу;
+   *  графиков в нём нет, потому что интерфейс рисует их из загруженного
+   *  отчёта, а на экране сравнения отчётов нет. */
+  pool?: string[];
   /** Раскрыта ли полоса. Живёт в `App`: от неё зависит раскладка всей
    *  страницы — навигация по разделам уходит вниз вместе с отчётом. */
   expanded: boolean;
@@ -173,6 +196,15 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
   onToast: (message: string) => void;
 }) {
   const setExpanded = onExpanded;
+  // Разбирать есть что, когда открыт отчёт или собран пул.
+  const готов = Boolean(report) || (pool?.length ?? 0) > 0;
+  // Разбор пула — тот же разбор, но говорит он о нескольких компаниях. Слова
+  // «эта компания» в нём читаются как вопрос про одну, и человек не понимает,
+  // про кого спрашивает.
+  const пул = (pool?.length ?? 0) > 0;
+  // Пул из одной — обычный разбор, и говорить о нём надо в единственном числе.
+  // «Спросите про всех 1 сразу» — та же ошибка, что «найдено 1 результатов».
+  const несколько = (pool?.length ?? 0) > 1;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -194,10 +226,12 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
   const [deal, setDeal] = useState<Deal>({});
   const questions = useMemo(
     () =>
-      suggestionPool(report, deal)
+      // В пуле подсказки свои: разделов у группы нет, а спрашивают про группу
+      // другое — кому дать отсрочку, у кого выше риск.
+      (пул ? (несколько ? ВОПРОСЫ_ПУЛА : ВОПРОСЫ_ОДНОЙ) : suggestionPool(report, deal))
         .filter((question) => !askedQuestions.includes(question))
         .slice(0, 3),
-    [askedQuestions, report, deal],
+    [askedQuestions, report, deal, pool, пул, несколько],
   );
 
   // Держим ленту внизу, только пока пользователь и так внизу. Иначе отлистать
@@ -221,7 +255,9 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
     setInput('');
     setAskedQuestions([]);
     setFeedback({});
-  }, [report?.inn]);
+    // Ключ разговора — компания или состав пула: ответы про прежний состав
+    // в новом вводят в заблуждение ровно так же, как ответы про другую компанию.
+  }, [report?.inn, (pool ?? []).join(',')]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -239,7 +275,8 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
 
   const ask = async (question: string) => {
     const clean = question.trim();
-    if (!clean || busy || !report) return;
+    const естьЧтоРазбирать = Boolean(report) || (pool?.length ?? 0) > 0;
+    if (!clean || busy || !естьЧтоРазбирать) return;
     setInput('');
     const replyId = crypto.randomUUID();
     setMessages((current) => [
@@ -285,7 +322,8 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
     abortRef.current = controller;
     let failed = '';
     try {
-      for await (const event of streamChat(report.inn, clean, sessionId, deal, controller.signal)) {
+      const цель = pool && pool.length > 0 ? pool : report!.inn;
+      for await (const event of streamChat(цель, clean, sessionId, deal, controller.signal)) {
         if (event.name === 'deal') {
           // Условия, разобранные из самой реплики: «а если отсрочка 60 дней?»
           // меняет сохранённый контекст так же, как переключатель в форме,
@@ -389,15 +427,19 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
       )}
     <section
       className={`chat-band${expanded ? ' chat-band--open' : ''}`}
-      aria-label="Разбор отчёта контрагента"
+      aria-label={несколько ? 'Разбор пула контрагентов' : 'Разбор отчёта контрагента'}
     >
       <header className="chat-band__head">
         <span className="ai-mark">AI</span>
         <div className="chat-band__title">
           <Typography.Title tag="h2" view="xsmall" font="styrene" weight="bold">
-            Разбор отчёта
+            {несколько ? 'Разбор пула' : 'Разбор отчёта'}
           </Typography.Title>
-          <small>Спросите что угодно об этой компании</small>
+          <small>
+            {несколько
+              ? `Спросите про всех ${pool!.length} сразу`
+              : 'Спросите что угодно об этой компании'}
+          </small>
         </div>
         {/* Переключатель в углу, а не кнопка «Свернуть» при раскрытом.
             Раскрытие есть и по фокусу в поле, но фокус — намерение спросить,
@@ -437,8 +479,9 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
               с задачей, и какие вопросы задавать по отчёту — наша работа, а не его.
               Чего в данных нет — говорим прямо, это критерий приёмки. */}
           <p>
-            Помогу решить, работать ли с этой компанией. Расскажите, что за сделка —
-            разберу отчёт под неё. Чего в данных нет, скажу прямо.
+            {несколько
+              ? 'Помогу выбрать, с кем из них работать. Расскажите, что за сделка — разберу всех под неё. Чего в данных нет, скажу прямо.'
+              : 'Помогу решить, работать ли с этой компанией. Расскажите, что за сделка — разберу отчёт под неё. Чего в данных нет, скажу прямо.'}
           </p>
         </div>
 
@@ -503,7 +546,7 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
                   })}
                 </div>
               )}
-              {message.check && <AnswerCheckLine check={message.check} />}
+              {message.check && <AnswerCheckLine check={message.check} many={несколько} />}
               {!message.streaming && (
                 <AnswerFeedback
                   value={feedback[message.id]}
@@ -521,7 +564,7 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           ) && (
           <div className="agent-message progress-card" aria-live="polite">
             <span className="message-author">Ассистент</span>
-            <p>Читаю отчёт…</p>
+            <p>{несколько ? 'Читаю отчёты…' : 'Читаю отчёт…'}</p>
           </div>
         )}
       </div>
@@ -571,8 +614,14 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           size={48}
           block
           value={input}
-          disabled={busy || !report}
-          placeholder={report ? 'Напишите вопрос по отчёту' : 'Чат доступен с отчётом сервера'}
+          disabled={busy || !готов}
+          placeholder={
+            несколько
+              ? 'Напишите вопрос про пул'
+              : пул || report
+                ? 'Напишите вопрос по отчёту'
+                : 'Чат доступен с отчётом сервера'
+          }
           aria-label="Вопрос по отчёту"
           onChange={(_, { value }) => setInput(value)}
           // Раздвижение по постановке курсора, а не по кнопке: намерение
@@ -591,7 +640,7 @@ export function ChatPanel({ report, expanded, onExpanded, onToast }: {
           type="submit"
           icon={SendMIcon}
           loading={busy}
-          disabled={!report || !input.trim()}
+          disabled={!готов || !input.trim()}
           aria-label="Отправить вопрос"
           title="Отправить вопрос"
         />

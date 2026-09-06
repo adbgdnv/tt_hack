@@ -1693,6 +1693,17 @@ button.report-section:hover {
 .tool-block__mark { flex-shrink: 0; }
 .tool-block__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Имя компании — приписка к названию вызова, а не второй заголовок: сжимается
+   первым и уступает место самому названию. */
+.tool-block__company {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+
 .tool-block--failed .tool-block__mark { color: var(--negative); }
 .tool-block--aborted .tool-block__mark { color: var(--attention); }
 
@@ -1879,10 +1890,19 @@ button.report-section:hover {
 .mode--on:hover { background: var(--dark); color: #fff; }
 
 .compare-page {
-  padding-top: 20px;
+  /* Снизу столько же, сколько у отчёта: разбор стоит последним блоком, и без
+     запаса свёрнутая полоса упирается в нижний край окна. */
+  padding: 20px 0 100px;
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* Разбор пула — тот же блок, что в отчёте, и правила у него те же. Отличие
+   одно: на сравнении он последний в потоке, поэтому не должен растягиваться
+   вслед за колонкой. */
+.compare-page .chat-band {
+  flex: none;
 }
 
 .pool {

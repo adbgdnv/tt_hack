@@ -342,7 +342,7 @@ export type ChatEvent =
   | { name: 'tool_end'; data: { tool: string; ok: boolean } }
   | { name: 'chart'; data: { chart: string; inn: string } }
   | { name: 'sources'; data: { items: { title: string; url: string; snippet: string }[] } }
-  | { name: 'lookup'; data: { topic: string; text: string } }
+  | { name: 'lookup'; data: { topic: string; text: string; company?: string } }
   | { name: 'check'; data: AnswerCheck }
   /** Условия сделки после этого хода: часть могла быть разобрана из реплики.
    *  Приходит первым, до единого слова ответа. */
@@ -361,7 +361,9 @@ export type ChatEvent =
  * тратить квоту, общую на всех пользователей.
  */
 export async function* streamChat(
-  inn: string,
+  /** Одна компания или пул: разбор одной — это пул из одного, и второй
+   *  функции для него заводить незачем. */
+  target: string | string[],
   message: string,
   sessionId: string,
   /** Условия сделки из формы. Что названо в самой реплике, сервер разбирает
@@ -370,10 +372,15 @@ export async function* streamChat(
   signal?: AbortSignal,
 ): AsyncGenerator<ChatEvent> {
   if (!apiBase) throw new Error('Сервис разбора не настроен');
-  const response = await fetch(`${apiBase}/chat/stream`, {
+  const пул = Array.isArray(target);
+  const response = await fetch(`${apiBase}${пул ? '/compare/chat/stream' : '/chat/stream'}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ inn, message, session_id: sessionId, deal }),
+    body: JSON.stringify(
+      пул
+        ? { inns: target, message, session_id: sessionId, deal }
+        : { inn: target, message, session_id: sessionId, deal },
+    ),
     signal,
   });
   if (!response.ok || !response.body) {
