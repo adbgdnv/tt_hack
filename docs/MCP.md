@@ -134,29 +134,29 @@ PYTHONPATH=src .venv/bin/python scripts/mcp_demo.py
 кладёт весь сервис. На сервере выкатку делает root-owned скрипт вне git-клона,
 копия для истории — `deploy/bin/tt-hack-mcp-deploy`.
 
-Один раз перед первой выкаткой:
+Задание `deploy-mcp` в `.github/workflows/deploy.yml` уже есть. Оно идёт
+**отдельным заданием**, а не шагом внутри `deploy`: пока право не выдано,
+`sudo` возвращает ошибку, и шагом внутри это уронило бы выкатку целиком —
+вместе с бэкендом и фронтом, которые к MCP отношения не имеют.
+
+Разово, от root на сервере. Скрипт уже лежит в `/usr/local/bin/` — осталось
+право. Все три права живут в одном файле `/etc/sudoers.d/tt-hack-api`
+(имя историческое, там уже и бэкенд, и фронт):
 
 ```bash
-# от root на сервере
-install -m 755 -o root -g root \
-  /opt/tt-hack/deploy/bin/tt-hack-mcp-deploy /usr/local/bin/tt-hack-mcp-deploy
-echo 'ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-mcp-deploy' \
-  > /etc/sudoers.d/tt-hack-mcp
-chmod 440 /etc/sudoers.d/tt-hack-mcp
-visudo -c
+# Проверяем на копии и только потом ставим на место: сломанный sudoers
+# отбирает sudo целиком, включая возможность его починить.
+cp /etc/sudoers.d/tt-hack-api /tmp/sudoers.new
+echo 'ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-mcp-deploy' >> /tmp/sudoers.new
+visudo -c -f /tmp/sudoers.new
+install -m 440 -o root -g root /tmp/sudoers.new /etc/sudoers.d/tt-hack-api
+rm -f /tmp/sudoers.new
+sudo -l -U ttdeploy          # должно появиться tt-hack-mcp-deploy
 ```
 
 Право выдаётся ровно на один файл. Скрипт принадлежит root и лежит вне клона:
 иначе пользователь выкатки правил бы то, что запускается от root, — а это
 не узкое право, а полный root.
 
-После этого шаг выкатки добавляется в `.github/workflows/deploy.yml` рядом
-с бэкендом:
-
-```yaml
-      - name: Выкатить MCP
-        run: ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo /usr/local/bin/tt-hack-mcp-deploy ${TAG}"
-```
-
-Пока скрипт не установлен, шага в workflow быть не должно: ssh с sudo на
-несуществующий файл валит выкатку целиком, вместе с бэкендом и фронтом.
+Если задание упало на `sudo: ... command not found` или `not allowed` — этот
+шаг не сделан.

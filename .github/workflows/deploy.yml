@@ -36,6 +36,9 @@ jobs:
   # Пока это задание только публикует образы: выкатка их ещё не забирает
   # и продолжает собирать на сервере. Так первый прогон нового пути ничего
   # не ломает — переключение идёт отдельным коммитом.
+  #
+  # Образов три: api, mcp, web. MCP собирается здесь же и по той же причине —
+  # на сервере ему собираться нечем.
   # ──────────────────────────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
@@ -225,4 +228,74 @@ jobs:
             echo "- Результат job: ${{ job.status }}"
             echo ""
             echo "Логи шага «Выложить статику превью» содержат коды smoke-check по каждой странице."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Выкатка MCP-сервера — ОТДЕЛЬНЫМ заданием, а не шагом в `deploy`.
+  #
+  # Причина одна и важная: у MCP свой root-скрипт на сервере, и пока он
+  # не установлен, `sudo` на несуществующий файл возвращает ошибку. Шагом
+  # внутри `deploy` это уронило бы выкатку целиком — вместе с бэкендом
+  # и фронтом, которые к MCP отношения не имеют. Отдельным заданием падает
+  # только оно, а продукт выкатывается.
+  #
+  # Идёт после `deploy`, а не параллельно: `.env` на сервере пишет он,
+  # а контейнер MCP читает тот же файл.
+  #
+  # Установка скрипта — разово и руками, см. docs/MCP.md:
+  #   install -m 755 -o root -g root \
+  #     /opt/tt-hack/deploy/bin/tt-hack-mcp-deploy /usr/local/bin/
+  #   echo 'ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-mcp-deploy' \
+  #     > /etc/sudoers.d/tt-hack-mcp && chmod 440 /etc/sudoers.d/tt-hack-mcp
+  # ──────────────────────────────────────────────────────────────────────
+  deploy-mcp:
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Короткая метка коммита
+        id: tag
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "sha=${SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Настроить SSH
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Выкатить MCP
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TAG: ${{ steps.tag.outputs.sha }}
+        run: |
+          # Скрипт принадлежит root и лежит вне git-клона; sudo выдан ровно
+          # на него одной строкой в /etc/sudoers.d/tt-hack-mcp. Внутри он
+          # забирает образ из реестра, подменяет контейнер и проверяет живость
+          # через scripts/mcp_probe.sh — рукопожатием и вызовом инструмента,
+          # потому что ручки /health у MCP нет.
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "sudo /usr/local/bin/tt-hack-mcp-deploy ${TAG}"
+
+      - name: Итог
+        if: always()
+        run: |
+          {
+            echo "### MCP"
+            echo ""
+            echo "- Образ: \`ghcr.io/${{ github.repository }}/mcp:${{ steps.tag.outputs.sha }}\`"
+            echo "- Результат: ${{ job.status }}"
+            if [ "${{ job.status }}" != "success" ]; then
+              echo ""
+              echo "Если шаг упал на \`sudo: ... command not found\` — root-скрипт"
+              echo "на сервере ещё не установлен, см. \`docs/MCP.md\`."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
