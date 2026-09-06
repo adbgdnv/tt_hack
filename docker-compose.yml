@@ -37,16 +37,23 @@ services:
       retries: 5
 
   mcp:
+    image: ghcr.io/adbgdnv/tt_hack/mcp:${TAG:-latest}
     build:
       context: .
       dockerfile: src/mcp_server/Dockerfile
     container_name: cc-mcp
     restart: unless-stopped
     ports:
+      # Как и у api — только петля машины. В данных ФИО и личные ИНН
+      # учредителей, наружу их отдаёт nginx за basic-авторизацией.
       - "127.0.0.1:8001:8001"
     env_file: .env
     environment:
       DATASET_PATH: /app/dataset/counterparties.json
+      # Внутри контейнера слушаем все интерфейсы: 127.0.0.1 здесь — петля
+      # самого контейнера, снаружи недостижимая. Закрывает порт привязка выше.
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8001"
     volumes:
       - ./dataset:/app/dataset:ro
 

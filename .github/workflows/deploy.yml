@@ -43,13 +43,17 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     strategy:
-      # Два образа независимы — собираются параллельно.
+      # Образы независимы — собираются параллельно.
       fail-fast: false
       matrix:
         include:
           - name: api
             context: .
             dockerfile: src/api/Dockerfile
+            args: ""
+          - name: mcp
+            context: .
+            dockerfile: src/mcp_server/Dockerfile
             args: ""
           - name: web
             # Контекст — сам каталог фронтенда: в образ не должно попадать
@@ -217,7 +221,7 @@ jobs:
             echo ""
             echo "- Коммит: \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
             echo "- Выкачена метка: \`${{ steps.tag.outputs.sha }}\`"
-            echo "- Образы: \`ghcr.io/${{ github.repository }}/{api,web}:${{ steps.tag.outputs.sha }}\`"
+            echo "- Образы: \`ghcr.io/${{ github.repository }}/{api,mcp,web}:${{ steps.tag.outputs.sha }}\`"
             echo "- Результат job: ${{ job.status }}"
             echo ""
             echo "Логи шага «Выложить статику превью» содержат коды smoke-check по каждой странице."

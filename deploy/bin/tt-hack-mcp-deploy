@@ -1,0 +1,72 @@
+#!/bin/bash
+# Выкатка MCP-сервера. Копия для истории; рабочий экземпляр кладётся на сервер
+# в /usr/local/bin/ и принадлежит root.
+#
+# Устроен как tt-hack-api-deploy и по тем же причинам: образ приезжает готовым
+# из реестра (сборка на машине с 894 МБ памяти кладёт сервис на пятнадцать
+# минут), sudo выдан узко, откат идёт на предыдущий образ.
+#
+# Разрешение выдаётся одной строкой в /etc/sudoers.d/tt-hack-mcp:
+#   ttdeploy ALL=(root) NOPASSWD: /usr/local/bin/tt-hack-mcp-deploy
+#
+# Проверка здоровья другая: у MCP нет ручки /health. Вместо неё —
+# scripts/mcp_probe.sh: рукопожатие, список инструментов и один вызов.
+# Вызов обязателен: сервер поднимается и без набора, читая его лениво.
+set -euo pipefail
+
+REPO=/opt/tt-hack
+LOG_PREFIX="[mcp-deploy]"
+TAG="${1:-latest}"
+export TAG
+
+echo "${LOG_PREFIX} метка: ${TAG}"
+
+git -C "${REPO}" fetch --quiet origin main
+git -C "${REPO}" reset --hard --quiet origin/main
+chown -R www-data:www-data "${REPO}"
+chown ttdeploy:ttdeploy "${REPO}/.env" 2>/dev/null || true
+
+cd "${REPO}"
+
+PREVIOUS=$(docker inspect cc-mcp --format '{{.Config.Image}}' 2>/dev/null || echo "")
+
+echo "${LOG_PREFIX} забираю образ"
+if ! docker compose pull mcp; then
+  echo "${LOG_PREFIX} ОШИБКА: образ не скачался — оставляю работающий" >&2
+  exit 1
+fi
+
+echo "${LOG_PREFIX} подменяю контейнер"
+docker compose up -d --no-build mcp
+
+rollback() {
+  if [ -z "${PREVIOUS}" ]; then
+    echo "${LOG_PREFIX} откатываться не на что — это первая выкатка" >&2
+    return
+  fi
+  echo "${LOG_PREFIX} откат на ${PREVIOUS}" >&2
+  TAG="${PREVIOUS##*:}" docker compose up -d --no-build --force-recreate mcp >&2
+}
+
+prune_old_images() {
+  docker images "ghcr.io/adbgdnv/tt_hack/mcp" --format '{{.ID}} {{.CreatedAt}}' \
+    | sort -k2 -r | tail -n +3 | awk '{print $1}' \
+    | xargs -r docker rmi >/dev/null 2>&1 || true
+}
+
+# Проверка живости — общая с ручной: скрипт в клоне делает рукопожатие,
+# читает список инструментов и зовёт один. Второй экземпляр этой проверки
+# разошёлся бы с первым при первой же правке транспорта.
+for attempt in $(seq 1 20); do
+  if "${REPO}/scripts/mcp_probe.sh" localhost:8001 >/dev/null 2>&1; then
+    echo "${LOG_PREFIX} здоров, инструменты объявлены и набор подключён"
+    prune_old_images
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "${LOG_PREFIX} ОШИБКА: сервер не ответил за 40 секунд" >&2
+docker logs cc-mcp --tail 30 >&2
+rollback
+exit 1
