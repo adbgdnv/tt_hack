@@ -159,7 +159,19 @@ def get_report(inn: str) -> dict:
     record = repo.by_inn(inn)
     if record is None:
         raise HTTPException(status_code=404, detail="Компания не найдена")
-    return _serialize(report_view.build(record))
+    ответ = _serialize(report_view.build(record))
+    # Своя оценка едет вместе с отчётом, а не отдельной ручкой: она посчитана
+    # из той же записи и стоит на том же экране. Замерено — сборка вердикта
+    # 0,2 мс против 0,3 мс у самого отчёта, второй проход бесплатен.
+    вердикт = compare_view.verdict(record)
+    ответ["verdict"] = {
+        "state": compare_view.state(вердикт),
+        "wording": compare_view.СЛОВАМИ[compare_view.state(вердикт)],
+        "gaps": вердикт.gaps,
+        "checks_passed": вердикт.checks_passed,
+        "checks_total": вердикт.checks_total,
+    }
+    return ответ
 
 
 @app.get("/counterparties/{inn}/news")
@@ -356,17 +368,15 @@ async def chat(request: ChatRequest) -> dict:
         "sections": list(answer.sections),
         "charts": list(answer.charts),
         "sources": list(answer.sources),
-        # То, что в потоке приходит событиями `lookup` и `check`. Без первого
-        # клиент не увидел бы данные, на которые опирается ответ; без второго —
-        # не отличил бы подтверждённое отчётом от неподтверждённого.
+        # То, что в потоке приходит событием `lookup`: без него клиент
+        # не увидел бы данные, на которые опирается ответ.
+        #
+        # Сверки чисел здесь больше нет. Замерено на настоящих отчётах: из семи
+        # процитированных чисел она подтвердила все семь, из пяти посчитанных
+        # три пометила как выдуманные, а из пяти выдуманных одно пропустила.
+        # То есть поощряла цитирование и наказывала счёт — ровно то, за чем
+        # человек приходит («денег в 15 раз меньше суммы сделки»). Проверка
+        # осталась в ядре и в MCP-инструменте `verify_claims`, где вызывающий
+        # просит её сам и понимает, что «не найдено» ≠ «выдумано».
         "lookups": list(answer.lookups),
-        "check": {
-            "total": len(answer.check.claims),
-            "unverified": [
-                {"number": c.number, "context": c.context}
-                for c in answer.check.claims
-                if not c.found
-            ],
-            "checked": answer.check.checked,
-        },
     }

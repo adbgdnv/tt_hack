@@ -1,6 +1,5 @@
 import { findFixtureByInn, searchFixtures } from './fixtures';
 import type {
-  AnswerCheck,
   BlockKey,
   CompanyNews,
   CompareResult,
@@ -343,7 +342,6 @@ export type ChatEvent =
   | { name: 'chart'; data: { chart: string; inn: string } }
   | { name: 'sources'; data: { items: { title: string; url: string; snippet: string }[] } }
   | { name: 'lookup'; data: { topic: string; text: string; company?: string } }
-  | { name: 'check'; data: AnswerCheck }
   /** Условия сделки после этого хода: часть могла быть разобрана из реплики.
    *  Приходит первым, до единого слова ответа. */
   | { name: 'deal'; data: Deal }

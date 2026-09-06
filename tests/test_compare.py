@@ -289,3 +289,107 @@ def test_пул_больше_предела_отклоняется():
 
     assert ответ.status_code == 422
     assert str(compare.ПРЕДЕЛ_ПУЛА) in ответ.json()["detail"]
+
+
+# ─────────────────── Имя состояния для экрана ───────────────────
+
+
+def test_чисто_с_пробелами_называется_иначе_чем_чисто():
+    """«Проверили и чисто» и «проверять было нечем» — разные вещи.
+
+    Замерено: без этого различия 45 компаний из 200 читаются как безупречные
+    там, где мы не смотрели целый раздел.
+    """
+    чистый = compare.Verdict(inn="1", name="А", level=compare.ЧИСТО, recommendation="")
+    с_пробелом = compare.Verdict(
+        inn="2", name="Б", level=compare.ЧИСТО, recommendation="", gaps=["Финансы"]
+    )
+
+    assert compare.state(чистый) == compare.ЧИСТО
+    assert compare.state(с_пробелом) == compare.НЕЧЕМ
+
+
+def test_сработавшее_важнее_пробелов():
+    """Пробел не отменяет находку: у компании с противоречием состояние про него."""
+    в = compare.Verdict(
+        inn="1", name="А", level=compare.ВНИМАНИЕ, recommendation="", gaps=["Финансы"]
+    )
+
+    assert compare.state(в) == compare.ВНИМАНИЕ
+
+
+def test_у_каждого_состояния_есть_слова():
+    for состояние in (compare.ЧИСТО, compare.УТОЧНИТЬ, compare.ВНИМАНИЕ, compare.НЕЧЕМ):
+        assert compare.СЛОВАМИ[состояние]
+
+
+def test_ни_в_одном_состоянии_нет_числа():
+    """Кейсодатель: ранжирование в виде скора не требуется."""
+    for слова in compare.СЛОВАМИ.values():
+        assert not any(с.isdigit() for с in слова)
+
+
+@нужен_набор
+def test_состояния_на_настоящем_наборе():
+    """Замер до кода: 55 чистых, 45 «оценить нечем», 84 с вопросами, 16 тревожных.
+
+    Число здесь не для красоты. Разойдётся — значит разошлось правило
+    или замер, и это надо разбирать, а не подгонять.
+    """
+    счёт: dict[str, int] = {}
+    for запись in НАБОР:
+        состояние = compare.state(compare.verdict(запись))
+        счёт[состояние] = счёт.get(состояние, 0) + 1
+
+    assert счёт == {
+        compare.ЧИСТО: 55,
+        compare.НЕЧЕМ: 45,
+        compare.УТОЧНИТЬ: 84,
+        compare.ВНИМАНИЕ: 16,
+    }
+
+
+@нужен_набор
+def test_у_ип_отсутствие_отчётности_не_пробел():
+    """У ИП бухотчётности не бывает по закону — это не «мы не смотрели»."""
+    ип = next(
+        з
+        for з in НАБОР
+        if str((з.get("baseInfo") or {}).get("shortName") or "").startswith("ИП")
+    )
+
+    assert "Финансы" not in compare.verdict(ип).gaps
+
+
+@нужен_набор
+def test_в_отчёте_есть_своя_оценка_и_в_ней_нет_числа():
+    """Продукт заявляет независимый вердикт — значит он должен быть там,
+    где человек решает «работать или нет», а не только на сравнении."""
+    from fastapi.testclient import TestClient
+
+    from api.main import app
+
+    with TestClient(app) as клиент:
+        оценка = клиент.get("/counterparties/5032257375/report").json()["verdict"]
+
+    assert оценка["wording"] == "осторожнее"
+    assert оценка["state"] in compare.СЛОВАМИ
+    # Балла нет: ни в состоянии, ни в формулировке. Счётчик проверок — не балл,
+    # это «сколько из скольких посмотрел источник», и он есть в самом отчёте.
+    assert not any(с.isdigit() for с in оценка["wording"])
+    assert "score" not in оценка
+
+
+@нужен_набор
+def test_оценка_отчёта_совпадает_с_оценкой_сравнения():
+    """Два экрана про одну компанию не должны расходиться."""
+    from fastapi.testclient import TestClient
+
+    from api.main import app
+
+    инн = "9713021306"
+    with TestClient(app) as клиент:
+        через_отчёт = клиент.get(f"/counterparties/{инн}/report").json()["verdict"]
+
+    запись = next(з for з in НАБОР if з["baseInfo"]["inn"] == инн)
+    assert через_отчёт["state"] == compare.state(compare.verdict(запись))

@@ -459,6 +459,18 @@ input:focus-visible,
   gap: 12px;
 }
 
+/* Три карточки в ряд, а не две с довеском: своя оценка равноправна чужим —
+   она про другой предмет, а не про меньшую важность. На узком экране ряд
+   складывается в колонку: три карточки по 300 пикселей не помещаются,
+   а сжатые до 200 теряют подпись о предмете измерения. */
+.source-lights__row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .source-lights__row--three { grid-template-columns: 1fr; }
+}
+
 /* Цветом залит весь блок, а не значок: оценка считывается боковым зрением.
    Заливка мягкая, а левый кант насыщенный — так цвет читается, но не спорит
    с собственным выводом сервиса ниже, который и должен забирать внимание. */
@@ -477,6 +489,15 @@ input:focus-visible,
 .rating--red { --rating-edge: #ec2d20; --rating-fill: #fdeeed; }
 .rating--grey { --rating-edge: #9a9da4; --rating-fill: #f2f3f5; }
 
+/* Чего не хватило — мелким под оценкой. Это уточнение к слову «нечем»,
+   а не второе утверждение: своим размером оно не должно спорить с оценкой. */
+.rating__note {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-tertiary);
+}
+
 /* Владелец оценки — текстом: «Банк России» рядом с ЗСК объясняет,
    почему сервис её не оспаривает. */
 .rating__owner {
@@ -493,7 +514,11 @@ input:focus-visible,
   color: var(--ink);
 }
 
+/* Оценка прижата к низу карточки: подпись о предмете измерения у своей
+   карточки длиннее, чем «Скоринг», и без этого три значения стоят на разной
+   высоте — ряд перестаёт читаться одним взглядом, ради чего он и сделан. */
 .rating__value {
+  margin-top: auto;
   font-size: 22px;
   font-weight: 800;
   line-height: 28px;
@@ -1738,21 +1763,6 @@ button.report-section:hover {
 
 /* Чем подтверждён ответ. Спокойная по умолчанию, тревожная — только когда
    что-то не сошлось: постоянная жёлтая полоса перестаёт читаться на третий раз. */
-.answer-check {
-  margin-top: 8px;
-  padding: 6px 10px;
-  border-radius: var(--border-radius-8);
-  background: var(--surface);
-  color: var(--ink-tertiary);
-  font-size: 12px;
-}
-
-.answer-check--doubt {
-  border-left: 3px solid var(--attention);
-  color: var(--ink-secondary);
-}
-
-.answer-check ul { margin: 4px 0 0; padding-left: 16px; }
 
 .tool-block__sources ul { margin: 4px 0 0; padding-left: 16px; }
 .tool-block__sources a { color: var(--link); }

@@ -10,7 +10,7 @@ import { SendMIcon } from '@alfalab/icons-glyph/SendMIcon';
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 
 import { streamChat } from '../api';
-import type { AnswerCheck, CounterpartyReport, Deal, MessageBlock } from '../types';
+import type { CounterpartyReport, Deal, MessageBlock } from '../types';
 import { dealKnown } from '../types';
 import { ChatMarkdown } from './ChatMarkdown';
 import { DealBar } from './DealBar';
@@ -29,7 +29,6 @@ type Message =
       sections: string[];
       streaming: boolean;
       /** Итог сверки чисел с отчётом. Приходит после текста ответа. */
-      check?: AnswerCheck;
     }
   /** Сбой сервиса — отдельная роль, а не ответ: путать их нельзя. */
   | { id: string; role: 'failure'; text: string };
@@ -106,40 +105,6 @@ function suggestionPool(report: CounterpartyReport | null, deal: Deal): string[]
     'Что в отчёте не влияет на банковскую оценку?',
   );
   return [...new Set(questions)];
-}
-
-/**
- * Чем подтверждён ответ.
- *
- * «Не выдумывает» — критерий приёмки кейса, и до этой строки он держался
- * на формулировках промпта: пользователю нечем было отличить число из отчёта
- * от придуманного. Неподтверждённое показывается, а не вычёркивается: нужны
- * и утверждение, и сомнение в нём.
- *
- * Ответ без чисел не показывает ничего: «проверять было нечего» — не то же
- * самое, что «подтверждено», и выдавать одно за другое нельзя.
- */
-function AnswerCheckLine({ check, many = false }: { check: AnswerCheck; many?: boolean }) {
-  if (check.total === 0) return null;
-  const confirmed = check.total - check.unverified.length;
-  return (
-    <div className={`answer-check${check.unverified.length ? ' answer-check--doubt' : ''}`}>
-      <span>
-        {/* В разборе пула числа сверяются с отчётами всех компаний, а не одной:
-            иначе настоящее число второй компании оказалось бы «не найдено». */}
-        Числа сверены с {many ? 'отчётами' : 'отчётом'}: {confirmed} из {check.total}
-      </span>
-      {check.unverified.length > 0 && (
-        <ul>
-          {check.unverified.map((claim) => (
-            <li key={`${claim.number}-${claim.context}`}>
-              <b>{claim.number}</b> — {many ? 'в отчётах' : 'в отчёте'} не нашлось: {claim.context}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 function AnswerFeedback({ value, onChange }: {
@@ -358,13 +323,6 @@ export function ChatPanel({ report, pool, expanded, onExpanded, onToast }: {
             call.title = `Запросил данные: ${event.data.topic}`;
           }
           schedule();
-        } else if (event.name === 'check') {
-          const проверка = event.data;
-          setMessages((current) =>
-            current.map((m) =>
-              m.id === replyId && m.role === 'agent' ? { ...m, check: проверка } : m,
-            ),
-          );
         } else if (event.name === 'tool_end') {
           const call = lastCall();
           if (call) call.state = event.data.ok ? 'ok' : 'failed';
@@ -546,7 +504,6 @@ export function ChatPanel({ report, pool, expanded, onExpanded, onToast }: {
                   })}
                 </div>
               )}
-              {message.check && <AnswerCheckLine check={message.check} many={несколько} />}
               {!message.streaming && (
                 <AnswerFeedback
                   value={feedback[message.id]}

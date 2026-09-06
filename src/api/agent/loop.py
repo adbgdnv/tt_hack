@@ -23,20 +23,18 @@
 
 from __future__ import annotations
 
-import asyncio
-import re
 from collections.abc import AsyncIterator
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 
 from langchain_core.messages import AIMessage, ToolMessage
 
 from api.agent import events, graph, prompt
-from core import compare, verify
+from core import compare
 from core import deal as deals
 from core import report as report_view
 from core.charts import build_charts
 from core.deal import Deal
-from core.llm import PRIMARY, LLMClient, Route, chain, environment
+from core.llm import PRIMARY, Route, chain, environment
 from core.report import Report
 
 PROVIDER_DOWN = "Сервис разбора сейчас недоступен. Отчёт выше остаётся полным."
@@ -103,7 +101,6 @@ class Answer:
     charts: tuple[str, ...] = ()
     sources: tuple[dict, ...] = ()
     lookups: tuple[dict, ...] = ()
-    check: verify.Verification = field(default_factory=verify.Verification)
     # Условия сделки, с которыми отвечали. Уходят клиенту, потому что часть
     # из них разобрана из реплики: человек должен видеть, что именно у нас
     # сохранилось, и мочь это поправить.
@@ -193,99 +190,10 @@ def _harvest(
     return text.strip(), tuple(charts), tuple(sources), tuple(lookups)
 
 
-# Вторая ступень проверки. Зовётся только когда сверка числами не сошлась:
-# на подтверждённом ответе она стоила бы вызова модели впустую.
-ВТОРАЯ_СТУПЕНЬ = """Ниже отчёт о компании и числа из ответа ассистента, которых
-автоматическая сверка в отчёте не нашла. Сверка сравнивает величины и промахивается
-на пересчётах, долях и суммах, которые ассистент сложил сам.
-
-Назови через запятую номера тех чисел, которые отчёт всё-таки подтверждает —
-прямо или очевидным пересчётом. Если ни одного, ответь «нет». Ничего кроме
-номеров не пиши.
-
-ОТЧЁТ:
-{report}
-
-ЧИСЛА:
-{claims}"""
-
-
-async def _second_opinion(
-    report, checked: verify.Verification, route: Route
-) -> verify.Verification:
-    """Спрашивает модель про числа, которых сверка не нашла.
-
-    Отдельный дешёвый вызов, а не второй агент: у него нет ни инструментов,
-    ни истории — только отчёт и список чисел. Отказ второй ступени не отменяет
-    первую: остаётся результат сверки, честно помеченный как непроверенный
-    моделью.
-    """
-    спорные = [(номер, c) for номер, c in enumerate(checked.claims, 1) if not c.found]
-    перечень = "\n".join(f"{номер}) «{c.number}» — {c.context}" for номер, c in спорные)
-    отчёты = report if isinstance(report, list) else [report]
-    вопрос = ВТОРАЯ_СТУПЕНЬ.format(
-        report="\n\n".join(prompt.render_report(о) for о in отчёты), claims=перечень
-    )
-    try:
-        ответ = await asyncio.to_thread(
-            LLMClient(provider=route.provider, model=route.model).ask,
-            [{"role": "user", "content": вопрос}],
-            max_tokens=300,
-            inn=отчёты[0].inn,
-        )
-    except Exception:  # noqa: BLE001 — сеть; первая ступень уже дала результат
-        return checked
-    подтверждённые = {int(n) for n in re.findall(r"\d+", ответ.content)}
-    claims = list(checked.claims)
-    for номер, _ in спорные:
-        if номер in подтверждённые:
-            claims[номер - 1] = replace(claims[номер - 1], found=True)
-    return verify.Verification(
-        claims=tuple(claims),
-        unverified=sum(1 for c in claims if not c.found),
-        checked=True,
-    )
-
-
-async def _verified(
-    report, text: str, route: Route, extras: tuple[str, ...] = ()
-) -> verify.Verification:
-    """Проверка ответа лестницей: сначала кодом, моделью — только если не сошлось.
-
-    Ступень вторая стоит вызова модели, поэтому не зовётся никогда, пока первая
-    сходится. На проверенном наборе вопросов сходится она в большинстве случаев.
-    """
-    итог = verify.check(text, report, extras)
-    if итог.unverified == 0:
-        return итог
-    return await _second_opinion(report, итог, route)
-
-
-
 def _text_of(messages: list) -> str:
     """Текст ответа из переписки — чтобы отличить молчание от ответа, не разбирая
     всё остальное."""
     return _harvest(messages)[0]
-
-
-def _shown(
-    lookups: tuple[dict, ...], sources: tuple[dict, ...], deal: Deal | None = None
-) -> tuple[str, ...]:
-    """Всё, что пользователь увидел рядом с ответом, кроме самого отчёта.
-
-    Проверка сверяет ответ с этим наравне с отчётом: взятое по теме, выдержка
-    из внешнего источника и условия сделки лежат у пользователя на экране,
-    значит числа из них — такое же основание, как числа отчёта.
-
-    Условия сделки попали сюда после живого прогона: «отсрочка на 60 дней»
-    в ответе помечалась неподтверждённой, потому что шестидесяти дней нет
-    ни в одном отчёте. Продукт обвинял модель в выдумывании числа, которое
-    назвал сам пользователь.
-    """
-    взятое = tuple(тема.get("text", "") for тема in lookups)
-    находки = tuple(f"{ссылка.get('title', '')} {ссылка.get('snippet', '')}" for ссылка in sources)
-    условия = (prompt.render_deal(deal),) if deal else ()
-    return взятое + находки + условия
 
 
 def _routes() -> tuple[Route, ...]:
@@ -355,7 +263,6 @@ async def run(
         charts=показанные,
         sources=найденные,
         lookups=взятое,
-        check=await _verified(report, text, путь, _shown(взятое, найденные)),
         deal=сделка,
     )
 
@@ -439,12 +346,6 @@ async def _stream(
 
     if text:
         state.remember(question, text)
-        # Проверка после ответа, а не до: ответ уже прочитан, а отметка о том,
-        # чем он подтверждён, догоняет его через секунду. Задерживать ради неё
-        # первое слово значило бы платить за проверку задержкой всего ответа.
-        yield _check_event(
-            await _verified(reports, text, путь, _shown(tuple(показанное), tuple(внешнее), deal))
-        )
     # Разделы отмечаются по главному отчёту: в разборе пула их у каждой компании
     # свои, и мешать их в один список значило бы приписать раздел не той.
     отмечены = _grounding(главный, text) if len(reports) == 1 else ()
@@ -541,18 +442,3 @@ async def run_pool_stream(
         max_tokens=graph.POOL_MAX_TOKENS,
     ):
         yield событие
-
-
-def _check_event(итог: verify.Verification) -> events.Event:
-    """Итог проверки в событие. Неподтверждённое показывается целиком: удалить
-    его значит спрятать сомнение, а пользователю нужны и утверждение, и сомнение."""
-    return events.Event(
-        "check",
-        {
-            "total": len(итог.claims),
-            "unverified": [
-                {"number": c.number, "context": c.context} for c in итог.claims if not c.found
-            ],
-            "checked": итог.checked,
-        },
-    )
