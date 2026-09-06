@@ -26,15 +26,27 @@
   --link: var(--color-light-text-link, #2a77ef);
 }
 
-:root {
-  /* Фирменный шрифт — Styrene: брендбук отводит Styrene A заголовкам,
-     Styrene B тексту. Берём стек дизайн-системы, а не пишем свой: файлы
-     шрифта коммерческие и в поставку не входят, поэтому подставится
-     системный — но там, где Styrene установлен, он подхватится сам. */
-  font-family: var(
-    --font-family-styrene,
-    'Styrene UI', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif
-  );
+/* Селектор html:root, а не :root: тема @alfalab/core-components-themes
+   объявляет эти же токены в своём :root, и её стили попадают в документ
+   после наших (компоненты тянут тему повторно). Одинаковая специфичность —
+   выигрывает последний, и заголовки оставались на Styrene. Лишний html
+   поднимает специфичность и снимает зависимость от порядка. */
+html:root {
+  /* Шрифт — SF (San Francisco). Файлы системные, не подключаем: -apple-system
+     и BlinkMacSystemFont отдают SF Pro на macOS/iOS, дальше по стеку — Segoe UI
+     и Roboto, чтобы на других платформах не съезжала метрика.
+     Переопределяем токены дизайн-системы, а не только body: типографика
+     @alfalab/core-components (в том числе font="styrene") резолвится через них,
+     иначе заголовки остались бы на Styrene. */
+  --font-sf:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', Roboto,
+    'Helvetica Neue', Helvetica, sans-serif;
+  --font-family: var(--font-sf);
+  --font-family-system: var(--font-sf);
+  --font-family-styrene: var(--font-sf);
+  --font-family-alfasans: var(--font-sf);
+
+  font-family: var(--font-sf);
   color: var(--ink);
   background: var(--page-bg);
   font-synthesis: none;
@@ -121,6 +133,13 @@ input:focus-visible,
   height: 32px;
 }
 
+/* Короткая версия стоит одна, без слова, и потому крупнее: знак должен
+   держать левый край шапки сам. */
+.brand--short .brand__mark {
+  width: 58px;
+  height: 58px;
+}
+
 .app-header__product {
   margin-left: 20px;
   padding-left: 20px;
@@ -162,8 +181,7 @@ input:focus-visible,
 
 .card,
 .company-header,
-.history-card,
-.source-lights {
+.history-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--border-radius-16);
@@ -445,91 +463,95 @@ input:focus-visible,
   gap: 8px;
 }
 
-/* ── Независимые светофоры — визуально отдельный, приглушённый слой ── */
+/* ── Три оценки в ряд: чей знак — того и оценка ── */
 
+/* Своя оценка у левого края, чужие парой у правого. Ряд читается как
+   «вот наш вывод — вот что говорят другие», и расстояние между ними
+   и есть та самая разница, ради которой сервис существует. */
 .source-lights {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
   margin-top: 14px;
-  padding: 16px 22px;
-  background: var(--inset);
+  padding: 14px 0 0;
 }
 
-.source-lights__row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+.source-lights__external {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
 }
 
-/* Три карточки в ряд, а не две с довеском: своя оценка равноправна чужим —
-   она про другой предмет, а не про меньшую важность. На узком экране ряд
-   складывается в колонку: три карточки по 300 пикселей не помещаются,
-   а сжатые до 200 теряют подпись о предмете измерения. */
-.source-lights__row--three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-@media (max-width: 1100px) {
-  .source-lights__row--three { grid-template-columns: 1fr; }
-}
-
-/* Цветом залит весь блок, а не значок: оценка считывается боковым зрением.
-   Заливка мягкая, а левый кант насыщенный — так цвет читается, но не спорит
-   с собственным выводом сервиса ниже, который и должен забирать внимание. */
 .rating {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 14px 16px;
-  border-radius: var(--border-radius-16);
-  border-left: 4px solid var(--rating-edge);
-  background: var(--rating-fill);
+  align-items: center;
+  gap: 16px;
 }
 
-.rating--green { --rating-edge: #0d9336; --rating-fill: #edf7f0; }
-.rating--orange { --rating-edge: #e07f0e; --rating-fill: #fdf4e8; }
-.rating--red { --rating-edge: #ec2d20; --rating-fill: #fdeeed; }
-.rating--grey { --rating-edge: #9a9da4; --rating-fill: #f2f3f5; }
+/* Знаки приведены к одной оптической высоте: разная высота читалась бы как
+   разный вес оценок, а он одинаков — сервис не пересчитывает ни одну. */
+.rating__logo {
+  display: block;
+  flex: none;
+}
 
-/* Чего не хватило — мелким под оценкой. Это уточнение к слову «нечем»,
+.rating__logo--alfa {
+  width: 149px;
+  height: 30px;
+}
+
+.rating__logo--cbr {
+  width: 165px;
+  height: 41.4px;
+}
+
+/* Название сервиса вместо знака — с «фундаментом» из конструкции логотипа:
+   брендбук отводит подчёркиванию ровно роль выделить в наборе ключевую мысль. */
+.rating__own {
+  display: block;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Заливка мягкая, а текст насыщенный: плашка называет вывод, а не кричит им.
+   Сплошной цвет на трёх плашках подряд превращал ряд в светофорную ленту,
+   в которой не видно, какая из оценок чья. */
+.rating__value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 14px 16px;
+  border-radius: var(--border-radius-16);
+  background: var(--rating-fill);
+  color: var(--rating-ink);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 26px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* Чего не хватило — мелким под плашкой. Это уточнение к слову «нечем»,
    а не второе утверждение: своим размером оно не должно спорить с оценкой. */
 .rating__note {
-  margin-top: 2px;
+  max-width: 260px;
+  text-align: center;
   font-size: 11px;
   line-height: 1.35;
   color: var(--ink-tertiary);
 }
 
-/* Владелец оценки — текстом: «Банк России» рядом с ЗСК объясняет,
-   почему сервис её не оспаривает. */
-.rating__owner {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
-}
-
-.rating__kind {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* Оценка прижата к низу карточки: подпись о предмете измерения у своей
-   карточки длиннее, чем «Скоринг», и без этого три значения стоят на разной
-   высоте — ряд перестаёт читаться одним взглядом, ради чего он и сделан. */
-.rating__value {
-  margin-top: auto;
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 28px;
-  color: var(--rating-edge);
-}
-
-.source-lights__caption strong {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 600;
-}
+.rating__value--green { --rating-fill: #ebf7ee; --rating-ink: #0d9336; }
+.rating__value--orange { --rating-fill: #fdf4e8; --rating-ink: #cf7000; }
+.rating__value--red { --rating-fill: #ffeeed; --rating-ink: #ec2d20; }
+.rating__value--grey { --rating-fill: #f2f3f5; --rating-ink: #5f6572; }
 
 /* ── Второй взгляд: детерминированный вывод, не банковская оценка ── */
 
@@ -709,7 +731,11 @@ input:focus-visible,
   width: 100%;
   margin-bottom: 14px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  /* Обводки нет: карточки лежат на сером поле, и белого прямоугольника
+     достаточно, чтобы отделить их друг от друга. Единственная линия —
+     цветной кант слева, и он тогда единственное, что различает карточки
+     между собой. */
+  border: 0;
   border-radius: var(--border-radius-16);
   padding: 16px 18px;
 }
@@ -725,8 +751,7 @@ button.report-section {
 }
 
 button.report-section:hover {
-  border-color: var(--border-strong);
-  box-shadow: 0 5px 16px rgba(26, 29, 33, 0.05);
+  box-shadow: 0 5px 16px rgba(26, 29, 33, 0.08);
 }
 
 .report-section--signal {
@@ -867,7 +892,7 @@ button.report-section:hover {
   padding-top: 10px;
   color: var(--ink);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Пройденные проверки в детальном виде. Галочка нарисована псевдоэлементом,
@@ -1180,13 +1205,6 @@ button.report-section:hover {
   border-radius: var(--border-radius-16);
 }
 
-.section-nav__head {
-  color: var(--ink-tertiary);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
 .section-nav__items {
   display: flex;
   flex-direction: column;
@@ -1369,16 +1387,20 @@ button.report-section:hover {
   font-size: 10px;
 }
 
+/* Значок разбора. Крупный и фирменным красным, а не чёрным: в правой колонке
+   он единственная точка входа в разговор, и мелкая тёмная метка читалась
+   как служебный ярлык, а не как приглашение спросить. */
 .ai-mark {
   display: inline-grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  background: var(--dark);
+  flex: none;
+  width: 50px;
+  height: 50px;
+  background: var(--negative);
   color: #fff;
   border-radius: var(--border-radius-8);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .chat-scroll {
@@ -1754,7 +1776,7 @@ button.report-section:hover {
   overflow: auto;
   background: var(--surface);
   border-radius: var(--border-radius-8);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -1843,27 +1865,28 @@ button.report-section:hover {
   gap: 10px;
   margin-left: 20px;
   padding-left: 20px;
-  border-left: 1px solid var(--border-strong);
   min-width: 0;
   color: var(--ink-tertiary);
-  font-size: 12.5px;
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
 }
 
+/* Имя компании — второе по величине после её оценки: страница про неё,
+   и вопрос «а точно ту проверяю» не должен возникать. */
 .company-chip__name {
   color: var(--ink);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   text-overflow: ellipsis;
   overflow: hidden;
 }
 
 .app-header__actions {
-  margin-left: auto;
+  margin-left: 20px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   flex: none;
 }
 
@@ -1876,9 +1899,8 @@ button.report-section:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 20px;
+  margin-left: auto;
   padding-left: 20px;
-  border-left: 1px solid var(--border-strong);
 }
 
 .mode {
@@ -1896,8 +1918,10 @@ button.report-section:hover {
 }
 
 .mode:hover { background: var(--inset); color: var(--ink); }
-.mode--on { background: var(--dark); color: #fff; }
-.mode--on:hover { background: var(--dark); color: #fff; }
+/* Активный режим — фирменным красным: в шапке это единственная заливка,
+   и она же говорит, в каком из двух продуктов пользователь находится. */
+.mode--on { background: var(--negative); color: #fff; }
+.mode--on:hover { background: var(--negative); color: #fff; }
 
 .compare-page {
   /* Снизу столько же, сколько у отчёта: разбор стоит последним блоком, и без

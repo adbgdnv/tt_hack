@@ -4,14 +4,35 @@
     {
       "name": "vibe-debug",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["scripts/vibe_debug_server.py"],
+      "runtimeArgs": [
+        "scripts/vibe_debug_server.py"
+      ],
       "port": 8788
     },
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "src/web", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "src/web",
+        "run",
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "src/web",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174"
+      ],
+      "port": 5174
     }
   ]
 }

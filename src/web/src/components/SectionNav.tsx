@@ -34,6 +34,7 @@ export function SectionNav({
 }) {
   if (sections.length === 0) return null;
 
+
   const сигналов = sections.filter((section) => section.state === 'signal').length;
   const пустых = sections.filter(
     (section) => section.state === 'empty' || section.state === 'not_applicable',
@@ -41,8 +42,6 @@ export function SectionNav({
 
   return (
     <nav className="section-nav" aria-label="Разделы отчёта">
-      <span className="section-nav__head">Разделы</span>
-
       <div className="section-nav__items">
         {sections.map((section) => (
           <TooltipDesktop

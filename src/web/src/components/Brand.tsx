@@ -1,5 +1,9 @@
 type BrandProps = {
   onHome?: () => void;
+  /** Короткая версия — одна литера. Брендбук отводит её носителям, которые
+   *  уже очевидно принадлежат банку: внутри проверки контрагента шапка такой
+   *  носитель и есть, и слово рядом со знаком только отодвигает имя компании. */
+  short?: boolean;
 };
 
 /**
@@ -20,11 +24,16 @@ function AlfaMark() {
   );
 }
 
-export function Brand({ onHome }: BrandProps) {
+export function Brand({ onHome, short }: BrandProps) {
   return (
-    <button className="brand" type="button" onClick={onHome} aria-label="На главную">
+    <button
+      className={'brand' + (short ? ' brand--short' : '')}
+      type="button"
+      onClick={onHome}
+      aria-label="На главную"
+    >
       <AlfaMark />
-      <span className="brand__name">АЛЬФА-БАНК</span>
+      {!short && <span className="brand__name">АЛЬФА-БАНК</span>}
     </button>
   );
 }

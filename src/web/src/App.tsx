@@ -9,7 +9,7 @@ import { ToastPlateDesktop } from '@alfalab/core-components-toast-plate/desktop'
 import { TooltipDesktop } from '@alfalab/core-components-tooltip/desktop';
 import { Typography } from '@alfalab/core-components-typography';
 import { DocumentPdfMIcon } from '@alfalab/icons-glyph/DocumentPdfMIcon';
-import { ShareMIcon } from '@alfalab/icons-glyph/ShareMIcon';
+import { ArrowDownLineDownCompactMIcon } from '@alfalab/icons-glyph/ArrowDownLineDownCompactMIcon';
 import { compareCounterparties, getCounterparty, getNews, getReport, sectionsFromCompany, searchCounterparties, datasetDate } from './api';
 import type { CompanyNews, CompareResult, Counterparty, CounterpartyReport, HistoryItem, ReportSectionData } from './types';
 import { deriveVerdict } from './verdict';
@@ -64,32 +64,47 @@ function AppHeader({ compact, onHome, mode, onMode, children }: {
 }) {
   return (
     <header className={'app-header' + (compact ? ' app-header--compact' : '')}>
-      <Brand onHome={onHome} />
+      <Brand onHome={onHome} short={compact} />
       {mode && onMode ? (
-        <div className="app-header__modes" role="tablist" aria-label="Режим">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'report'}
-            className={`mode${mode === 'report' ? ' mode--on' : ''}`}
-            onClick={() => onMode('report')}
-          >
-            Проверка контрагента
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'compare'}
-            className={`mode${mode === 'compare' ? ' mode--on' : ''}`}
-            onClick={() => onMode('compare')}
-          >
-            Сравнение контрагентов
-          </button>
-        </div>
+        <>
+          {children}
+          {/* Режимы у правого края, а слева — про какую компанию речь. Выбор
+              режима случается раз за сессию, а имя компании читают постоянно:
+              у левого края стоит то, к чему возвращаются. */}
+          <div className="app-header__modes" role="tablist" aria-label="Режим">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'report'}
+              className={`mode${mode === 'report' ? ' mode--on' : ''}`}
+              onClick={() => onMode('report')}
+            >
+              Проверка контрагента
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'compare'}
+              className={`mode${mode === 'compare' ? ' mode--on' : ''}`}
+              onClick={() => onMode('compare')}
+            >
+              Сравнение контрагентов
+            </button>
+            {/* Не режим, а выход из обоих — потому и не вкладка по роли,
+                хотя стоит в одном ряду с ними. */}
+            {onHome && (
+              <button type="button" className="mode" onClick={onHome}>
+                Новый поиск
+              </button>
+            )}
+          </div>
+        </>
       ) : (
-        <span className="app-header__product">Проверка контрагента</span>
+        <>
+          <span className="app-header__product">Проверка контрагента</span>
+          {children}
+        </>
       )}
-      {children}
     </header>
   );
 }
@@ -369,7 +384,7 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
             <IconButtonDesktop
               size={40}
               view="secondary"
-              icon={ShareMIcon}
+              icon={ArrowDownLineDownCompactMIcon}
               aria-label="Скопировать ссылку на отчёт"
               onClick={() => {
                 const url = `${window.location.origin}${window.location.pathname}?inn=${company.inn}`;
@@ -380,9 +395,6 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
               }}
             />
           </TooltipDesktop>
-          <ButtonDesktop size={40} view="text" onClick={onHome}>
-            Новый поиск
-          </ButtonDesktop>
         </div>
       </AppHeader>
 
@@ -407,6 +419,7 @@ function Dashboard({ company, report, news, openedSection, highlighted, onHome, 
                 bank={{ known: bankKnown, value: bankValue }}
                 zsk={{ known: zskKnown, value: zskValue }}
                 own={report?.verdict}
+                verdict={verdict}
               />
               <VerdictBanner verdict={verdict} onOpenSection={onOpenBlock} />
 
@@ -648,9 +661,6 @@ export default function App() {
             mode="compare"
             onMode={(next) => setView(next === 'compare' ? 'compare' : company ? 'dashboard' : 'home')}
           >
-            <div className="app-header__actions">
-              <ButtonDesktop size={40} view="text" onClick={goHome}>Новый поиск</ButtonDesktop>
-            </div>
           </AppHeader>
           <ComparePage
             pool={pool}
